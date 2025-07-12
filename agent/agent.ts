@@ -38,6 +38,29 @@ export class Agent {
   private currentMessages: Message[] = [];
 
   constructor(config: AgentConfig) {
+    // Handle XML string system prompt if provided
+    if (config.systemPrompt && !config.document) {
+      // Parse XML to create document blocks
+      const { parseXML } = require('../document/parser-grammar');
+      try {
+        const parsedDoc = parseXML(config.systemPrompt);
+        // Create a minimal AgentDocument with required fields
+        config.document = {
+          type: 'agent',
+          id: config.agentId || 'agent-' + Date.now(),
+          name: config.agentName || 'Assistant',
+          model: config.model || 'gpt-4',
+          blocks: parsedDoc.blocks || []
+        } as AgentDocument;
+      } catch (error) {
+        throw new Error(`Failed to parse system prompt XML: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    
+    if (!config.document) {
+      throw new Error('Either document or systemPrompt must be provided');
+    }
+
     this.config = config;
     this.memory = new ActivityMemory(config.memoryLimit);
     this.context = {

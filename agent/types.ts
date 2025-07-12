@@ -10,7 +10,11 @@ import { ToolRegistry } from '../document/tool-registry';
  * Agent configuration
  */
 export interface AgentConfig {
-  document: AgentDocument;
+  document?: AgentDocument;
+  systemPrompt?: string; // XML string alternative to document
+  agentId?: string; // Required when using systemPrompt
+  agentName?: string; // Required when using systemPrompt
+  model?: string; // Required when using systemPrompt
   tools: ToolRegistry;
   memoryLimit?: number;
 }
