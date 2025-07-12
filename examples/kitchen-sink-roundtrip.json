@@ -1,0 +1,786 @@
+[
+  {
+    "id": "de44905c-95a6-47e0-a860-7b7b642ba80d",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default",
+      "level": 1
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Heading 1",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c74da1cc-0237-46fb-8aca-d5ffc6cdd3dd",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default",
+      "level": 2
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Heading 2",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9586ec34-f632-4430-8aff-a1576acde554",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default",
+      "level": 3
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Heading 3",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "be07ee3f-4efa-467c-988d-11b15df9a3f9",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7e4eddd2-34be-4f9b-a488-fd876b8c8118",
+    "type": "checkListItem",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default",
+      "checked": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "This is an unchecked list item",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "73267701-844b-438c-a0ab-1db75757d26a",
+    "type": "checkListItem",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default",
+      "checked": true
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "This is a checked list item",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9ff91546-1535-4f9e-b46c-5560267d70b4",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6a0c8f66-f848-4d97-8b5c-b7ecaaf53c26",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "this is a bullet item",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "3b9d47de-43f5-440c-9bff-91bbcfbffd68",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "this is another bullet item",
+        "styles": {}
+      }
+    ],
+    "children": [
+      {
+        "id": "60c38453-1561-4102-bcca-b05277401312",
+        "type": "bulletListItem",
+        "props": {
+          "textColor": "default",
+          "textAlignment": "left",
+          "backgroundColor": "default"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "this is a level 2 bullet item",
+            "styles": {}
+          }
+        ],
+        "children": [
+          {
+            "id": "95a6e1cd-fbc6-4aa3-8f55-068342f9b429",
+            "type": "bulletListItem",
+            "props": {
+              "textColor": "default",
+              "textAlignment": "left",
+              "backgroundColor": "default"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "this is a level 3 bullet item",
+                "styles": {}
+              }
+            ],
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "e43c124f-0c96-43a1-bfe3-534360363bac",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a038df8f-726b-4b4e-874c-1ee865e56e6d",
+    "type": "numberedListItem",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "this is a number list item",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8c7a561c-bc37-4750-ac75-1ec39010d130",
+    "type": "numberedListItem",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "this is another number list item",
+        "styles": {}
+      }
+    ],
+    "children": [
+      {
+        "id": "d28012b6-bdcc-4bfb-99e1-e27d4e8540a7",
+        "type": "numberedListItem",
+        "props": {
+          "textColor": "default",
+          "textAlignment": "left",
+          "backgroundColor": "default"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "this is a level 2 number list item",
+            "styles": {}
+          }
+        ],
+        "children": [
+          {
+            "id": "539b56da-a914-49de-a2b7-1ccdac75a38d",
+            "type": "numberedListItem",
+            "props": {
+              "textColor": "default",
+              "textAlignment": "left",
+              "backgroundColor": "default"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "this is a level 3 number list item",
+                "styles": {}
+              }
+            ],
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "c4290529-6d70-44db-89f3-1c5d957163ae",
+        "type": "numberedListItem",
+        "props": {
+          "textColor": "default",
+          "textAlignment": "left",
+          "backgroundColor": "default"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "this is a level 2 number list item",
+            "styles": {}
+          }
+        ],
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "ab96a946-264a-4454-b8e5-7ed95037d930",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2cb21253-e9ea-493d-a5a8-d94bb50ee5f8",
+    "type": "quote",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "this is a fancy quote",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b43976c2-b107-49c3-885b-93c06665e895",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4d27630c-6ade-47d5-a671-7764bfc7bf86",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "this is code",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "fd93d2f5-69b3-4417-9975-18a323ccf1e7",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "05da6bdb-5b15-4f8c-80db-eaca271857ef",
+    "type": "table",
+    "props": {
+      "textColor": "default"
+    },
+    "content": {
+      "rows": [
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": [
+                {
+                  "text": "heading",
+                  "type": "text",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": [
+                {
+                  "text": "heading col 1",
+                  "type": "text",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": [
+                {
+                  "text": "heading col 2`",
+                  "type": "text",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": [
+                {
+                  "text": "row 1, col 1",
+                  "type": "text",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": [
+                {
+                  "text": "row 1, col 2",
+                  "type": "text",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": [
+                {
+                  "text": "row 3, col 3",
+                  "type": "text",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": [
+                {
+                  "text": "row 2, col 1",
+                  "type": "text",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": [
+                {
+                  "text": "row 2, col 2",
+                  "type": "text",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": [
+                {
+                  "text": "row 2, col 3",
+                  "type": "text",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": [
+                {
+                  "text": "next 2 cols are empty:",
+                  "type": "text",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": []
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "colspan": 1,
+                "rowspan": 1,
+                "textColor": "default",
+                "textAlignment": "left",
+                "backgroundColor": "default"
+              },
+              "content": []
+            }
+          ]
+        }
+      ],
+      "type": "tableContent",
+      "columnWidths": [
+        null,
+        null,
+        null
+      ]
+    },
+    "children": []
+  },
+  {
+    "id": "f41b4e0d-47e9-43f7-be45-086d0a237c2d",
+    "type": "separator",
+    "props": {
+      "text": "Section Separator"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "/da",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8f8286ef-3baa-4f5a-800a-40f1908f8a14",
+    "type": "trigger",
+    "props": {
+      "trigger": "time:schedule",
+      "params": "{\"time\":\"09:00\",\"days\":[2]}",
+      "enabled": true,
+      "modelId": "gpt-4.1"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "this is a test to ",
+        "styles": {}
+      },
+      {
+        "type": "mention",
+        "props": {
+          "id": "telegram:sendMessage",
+          "label": "Send Message",
+          "iconUrl": "",
+          "mentionId": "1752333173214-oj3e0cah3",
+          "parameters": "",
+          "mentionType": "tool"
+        }
+      },
+      {
+        "type": "text",
+        "text": " -- with ",
+        "styles": {}
+      },
+      {
+        "type": "mention",
+        "props": {
+          "id": "79ae1504-29e3-4988-b076-1c07336a7fda",
+          "label": "My insurances",
+          "iconUrl": "",
+          "mentionId": "1752333173214-gm4jyz8k2",
+          "parameters": "",
+          "mentionType": "document"
+        }
+      },
+      {
+        "type": "text",
+        "text": " ",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5908f7e7-e84b-4271-a182-80860ca0ab86",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a07870c0-c46b-4163-a190-d14f8a3ddcaa",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "This is a document: ",
+        "styles": {}
+      },
+      {
+        "type": "mention",
+        "props": {
+          "id": "7e489a75-11cd-4476-b9f9-91836ff4ffba",
+          "label": "Sander",
+          "iconUrl": "",
+          "mentionId": "1752333173214-0j0rpw1um",
+          "parameters": "",
+          "mentionType": "document"
+        }
+      },
+      {
+        "type": "text",
+        "text": " ",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "0b35cb7d-24f3-4d1e-ac8b-22c3ae76635c",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "313263c1-413b-4608-9a01-de4e7578ea88",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "You have access to this to answer my questions:",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4b81435a-33ca-4226-adf3-809a53193a80",
+    "type": "tool",
+    "props": {
+      "title": "Find my life",
+      "icon": "🔧",
+      "toolDefinition": "[{\"id\":\"1\",\"type\":\"paragraph\",\"props\":{\"textColor\":\"default\",\"backgroundColor\":\"default\",\"textAlignment\":\"left\"},\"content\":[{\"type\":\"text\",\"text\":\"Say hi\",\"styles\":{}}],\"children\":[]},{\"id\":\"c3630469-f799-4b2d-a41c-66a0e65d04e8\",\"type\":\"functionCall\",\"props\":{\"tool\":\"ai:generateText\",\"params\":\"{}\",\"response\":\"\",\"error\":\"\",\"modelId\":\"gpt-4.1\"},\"content\":[{\"type\":\"text\",\"text\":\"find life\",\"styles\":{}}],\"children\":[]},{\"id\":\"6015494a-784d-4118-917c-55badbc3f0fe\",\"type\":\"paragraph\",\"props\":{\"textColor\":\"default\",\"backgroundColor\":\"default\",\"textAlignment\":\"left\"},\"content\":[],\"children\":[]}]"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "b055188c-09ce-4001-ae05-cc75c4ef346c",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "textAlignment": "left",
+      "backgroundColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "",
+        "styles": {}
+      }
+    ],
+    "children": []
+  }
+]
