@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document id="meeting-notes">
+  <h1>Team Meeting Notes</h1>
+  
+  <p>Date: <variable name="meetingDate" prompt="Enter meeting date"/></p>
+  
+  <h2>Attendees</h2>
+  <bulletlistitem><mention:user ref="u-alice" label="Alice Chen"/></bulletlistitem>
+  <bulletlistitem><mention:user ref="u-bob" label="Bob Smith"/></bulletlistitem>
+  <bulletlistitem><mention:user ref="u-carol" label="Carol Davis"/></bulletlistitem>
+  
+  <h2>Agenda</h2>
+  <numberedlistitem>Project status update</numberedlistitem>
+  <numberedlistitem>Technical blockers discussion</numberedlistitem>
+  <numberedlistitem>Next sprint planning</numberedlistitem>
+  
+  <h2>Action Items</h2>
+  <checklistitem checked="false">Alice to review <mention:document ref="doc-123" label="API Design Doc"/></checklistitem>
+  <checklistitem checked="false">Bob to fix authentication bug</checklistitem>
+  <checklistitem checked="true">Carol to schedule follow-up meeting</checklistitem>
+  
+  <separator />
+  
+  <p><em>Next meeting: Thursday 2pm</em></p>
+</document>
