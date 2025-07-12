@@ -46,23 +46,38 @@ export interface DiffDocument {
  * Edit operation types
  */
 export type EditOperation = 
-  | EditPropOperation
+  | EditAttrOperation
   | EditContentOperation
+  | EditParamsOperation
+  | EditIdOperation
   | InsertOperation
   | DeleteOperation
-  | ReplaceOperation;
+  | ReplaceOperation
+  | MoveOperation;
 
-export interface EditPropOperation {
-  type: 'edit-prop';
+export interface EditAttrOperation {
+  type: 'edit:attr';
   blockId: string;
   name: string;
   value: string;
 }
 
 export interface EditContentOperation {
-  type: 'edit-content';
+  type: 'edit:content';
   blockId: string;
   content: RichContent[];
+}
+
+export interface EditParamsOperation {
+  type: 'edit:params';
+  blockId: string;
+  params: Record<string, unknown>;
+}
+
+export interface EditIdOperation {
+  type: 'edit:id';
+  blockId: string;
+  newId: string;
 }
 
 export interface InsertOperation {
@@ -83,6 +98,18 @@ export interface ReplaceOperation {
   type: 'replace';
   blockId: string;
   blocks: Block[];
+}
+
+export interface MoveOperation {
+  type: 'move';
+  blockId?: string;
+  blockIds?: string[];
+  fromBlockId?: string;
+  toBlockId?: string;
+  afterBlockId?: string;
+  beforeBlockId?: string;
+  atStart?: boolean;
+  atEnd?: boolean;
 }
 
 export interface DocumentMetadata {

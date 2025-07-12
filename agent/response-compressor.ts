@@ -41,44 +41,71 @@ export async function compressToolResponse(
   // Format the raw response for the AI
   const responseStr = formatResponse(context.rawResponse);
   
-  const result = await generateText({
-    model: getModel('gpt-4.1-mini'),
-    temperature: 0, // Deterministic extraction
-    system: 'You are a response compressor. Extract only the most relevant information from tool responses. Return ONLY a clean JSON object with the essential findings.',
-    prompt: `Tool: ${context.toolName}
-Parameters: ${JSON.stringify(context.toolParams, null, 2)}
-${context.toolContent ? `Content: ${context.toolContent}` : ''}
-
-Recent conversation:
-${conversationContext}
-
-Verbose tool response:
-${responseStr}
-
-Extract the key findings, results, and conclusions. Return as a clean JSON object.`,
-  });
-  
+  // For now, just do simple truncation/summarization without AI calls
+  // This prevents the double response issue
   const originalSize = JSON.stringify(context.rawResponse).length;
-  const compressedSize = result.text.length;
-  const ratio = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
   
-  console.log(`✅ Response compressed: ${originalSize} → ${compressedSize} chars (${ratio}% reduction)`);
-  
-  try {
-    const parsed = JSON.parse(result.text);
-    console.log(`📋 Compressed result:`, parsed);
-    return parsed;
-  } catch {
-    // If parsing fails, return the text response
-    console.log(`📋 Compressed result (text):`, result.text);
-    return result.text;
+  if (typeof context.rawResponse === 'string') {
+    // Check if this looks like a conversational response
+    const isConversational = context.rawResponse.includes('?') || 
+                             context.rawResponse.includes('I') ||
+                             context.rawResponse.includes('you') ||
+                             context.rawResponse.length > 50;
+    
+    if (isConversational) {
+      // For conversational responses, just return them as-is
+      // The AI should understand this is the complete response
+      const response = context.rawResponse.length > 1000 
+        ? context.rawResponse.substring(0, 1000) + '... [truncated]'
+        : context.rawResponse;
+      
+      console.log(`✅ Conversational response detected: ${originalSize} chars`);
+      return response;
+    }
+    
+    // Regular compression for non-conversational strings
+    const compressed = context.rawResponse.length > 1000 
+      ? context.rawResponse.substring(0, 1000) + '... [truncated]'
+      : context.rawResponse;
+    
+    console.log(`✅ Response compressed: ${originalSize} → ${compressed.length} chars`);
+    return compressed;
   }
+  
+  if (context.rawResponse && typeof context.rawResponse === 'object') {
+    // For objects, extract key fields or summarize
+    if ('variables' in context.rawResponse && 'blocks' in context.rawResponse) {
+      // ToolExecutionContext - extract summary
+      const ctx = context.rawResponse as any;
+      const summary = {
+        success: ctx.metadata?.blocksSucceeded > 0,
+        blocksExecuted: ctx.metadata?.blocksExecuted || 0,
+        variables: Object.fromEntries(ctx.variables || new Map()),
+        errors: ctx.metadata?.blocksFailed > 0 ? 'Some blocks failed' : null
+      };
+      
+      console.log(`✅ Response compressed: ${originalSize} → ${JSON.stringify(summary).length} chars`);
+      return summary;
+    }
+    
+    // For other objects, return as-is but log
+    console.log(`✅ Response kept as-is: ${originalSize} chars (not complex enough)`);
+    return context.rawResponse;
+  }
+  
+  // Default: return as-is
+  return context.rawResponse;
 }
 
 /**
  * Check if a response is complex enough to need compression
  */
 function isComplexResponse(response: unknown): boolean {
+  // Simple strings don't need compression
+  if (typeof response === 'string') {
+    return response.length > 2000; // Only compress very long strings
+  }
+  
   // ToolExecutionContext is always complex
   if (response && typeof response === 'object') {
     if ('variables' in response && 'blocks' in response && 'metadata' in response) {
@@ -88,7 +115,7 @@ function isComplexResponse(response: unknown): boolean {
   
   // Large responses need compression
   const size = JSON.stringify(response).length;
-  return size > 1000;
+  return size > 2000; // Increased threshold to avoid compressing simple responses
 }
 
 /**

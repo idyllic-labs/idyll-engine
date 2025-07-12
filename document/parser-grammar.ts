@@ -211,7 +211,7 @@ function parseEditOperation(element: xml2js.Element): EditOperation | null {
   switch (element.name) {
     case "edit:prop":
       return {
-        type: "edit-prop",
+        type: "edit:attr",
         blockId: attrs["block-id"] as string,
         name: attrs.name as string,
         value: attrs.value as string,
@@ -219,7 +219,7 @@ function parseEditOperation(element: xml2js.Element): EditOperation | null {
 
     case "edit:content":
       return {
-        type: "edit-content",
+        type: "edit:content",
         blockId: attrs["block-id"] as string,
         content: parseRichContent(element),
       };
@@ -975,7 +975,11 @@ function serializeRichContent(
         return {
           type: "element",
           name: "annotation",
-          attributes: item.annotation,
+          attributes: {
+            ...(item.annotation.title && { title: String(item.annotation.title) }),
+            ...(item.annotation.comment && { comment: String(item.annotation.comment) }),
+            ...(item.annotation.confidence !== undefined && { confidence: String(item.annotation.confidence) }),
+          },
           elements: serializeRichContent(item.content),
         };
 
@@ -1048,7 +1052,7 @@ function serializeMetadata(
  */
 function serializeEditOperation(operation: EditOperation): xml2js.Element {
   switch (operation.type) {
-    case "edit-prop":
+    case "edit:attr":
       return {
         type: "element",
         name: "edit:prop",
@@ -1059,7 +1063,7 @@ function serializeEditOperation(operation: EditOperation): xml2js.Element {
         },
       };
 
-    case "edit-content":
+    case "edit:content":
       return {
         type: "element",
         name: "edit:content",

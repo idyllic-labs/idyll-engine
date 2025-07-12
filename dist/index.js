@@ -9069,7 +9069,7 @@ var ParseError = class extends IdyllEngineError {
   }
 };
 
-// document/grammar.ts
+// document/grammars/grammar-dsl.ts
 function terminal(element, attrs, content) {
   return { type: "terminal", element, attributes: attrs, content };
 }
@@ -9104,13 +9104,9 @@ function ref(name17) {
 }
 var zeroOrMore = (rule) => repeat(rule, 0, null);
 var oneOrMore = (rule) => repeat(rule, 1, null);
-var GRAMMAR = {
-  // Root types
-  root: choice(
-    "document",
-    "agent",
-    "diff"
-  ),
+
+// document/grammars/document-grammar.ts
+var DOCUMENT_GRAMMAR = {
   // Document root
   document: seq(
     terminal("document", {
@@ -9120,24 +9116,6 @@ var GRAMMAR = {
       modified: { type: "string", required: false }
     }),
     zeroOrMore("block")
-  ),
-  // Agent system prompt root
-  agent: seq(
-    terminal("agent", {
-      id: { type: "string", required: false },
-      name: { type: "string", required: false },
-      description: { type: "string", required: false },
-      model: { type: "string", required: false }
-    }),
-    zeroOrMore("block")
-  ),
-  // Diff operations root
-  diff: seq(
-    terminal("diff", {
-      targetDocument: { type: "string", required: false },
-      timestamp: { type: "string", required: false }
-    }),
-    oneOrMore("edit-operation")
   ),
   // Blocks
   block: choice(
@@ -9204,10 +9182,10 @@ var GRAMMAR = {
       "idyll-tool": {
         type: "string",
         required: true,
-        // Format: "module:function" or just "function" (e.g., "demo:echo", "ai:analyzeText", "echo")
+        // Format: \"module:function\" or just \"function\" (e.g., \"demo:echo\", \"ai:analyzeText\", \"echo\")
         // Module and function names MUST be valid JS identifiers
         // For Azure Functions compatibility, transform at adapter layer:
-        // "module:function" → "module--function" (double hyphen separator)
+        // \"module:function\" → \"module--function\" (double hyphen separator)
         pattern: /^([a-zA-Z_$][a-zA-Z0-9_$]*:)?[a-zA-Z_$][a-zA-Z0-9_$]*$/
       },
       modelId: { type: "string", required: false }
@@ -9221,10 +9199,10 @@ var GRAMMAR = {
       "idyll-trigger": {
         type: "string",
         required: true,
-        // Format: "module:trigger" or just "trigger" (e.g., "time:schedule", "webhook:receive", "daily")
+        // Format: \"module:trigger\" or just \"trigger\" (e.g., \"time:schedule\", \"webhook:receive\", \"daily\")
         // Module and trigger names MUST be valid JS identifiers
         // For Azure Functions compatibility, transform at adapter layer:
-        // "module:trigger" → "module--trigger" (double hyphen separator)
+        // \"module:trigger\" → \"module--trigger\" (double hyphen separator)
         pattern: /^([a-zA-Z_$][a-zA-Z0-9_$]*:)?[a-zA-Z_$][a-zA-Z0-9_$]*$/
       },
       enabled: { type: "boolean", default: true }
@@ -9333,17 +9311,46 @@ var GRAMMAR = {
     }),
     ref("rich-content")
   ),
-  text: terminal("_text", {}, "text"),
+  text: terminal("_text", {}, "text")
   // Raw text node
-  // Edit operations (for diff root)
+};
+
+// document/grammars/agent-grammar.ts
+var AGENT_GRAMMAR = {
+  // Agent system prompt root
+  agent: seq(
+    terminal("agent", {
+      id: { type: "string", required: false },
+      name: { type: "string", required: false },
+      description: { type: "string", required: false },
+      model: { type: "string", required: false }
+    }),
+    zeroOrMore("block")
+  )
+};
+
+// document/grammars/diff-grammar.ts
+var DIFF_GRAMMAR = {
+  // Diff operations root
+  diff: seq(
+    terminal("diff", {
+      targetDocument: { type: "string", required: false },
+      timestamp: { type: "string", required: false }
+    }),
+    oneOrMore("edit-operation")
+  ),
+  // Edit operations
   "edit-operation": choice(
-    "edit-prop",
+    "edit-attr",
     "edit-content",
+    "edit-params",
+    "edit-id",
     "insert",
     "delete",
-    "replace"
+    "replace",
+    "move"
   ),
-  "edit-prop": terminal("edit:prop", {
+  "edit-attr": terminal("edit:attr", {
     "block-id": { type: "string", required: true },
     name: { type: "string", required: true },
     value: { type: "string", required: true }
@@ -9354,6 +9361,16 @@ var GRAMMAR = {
     }),
     ref("rich-content")
   ),
+  "edit-params": seq(
+    terminal("edit:params", {
+      "block-id": { type: "string", required: true }
+    }),
+    ref("json-content")
+  ),
+  "edit-id": terminal("edit:id", {
+    "block-id": { type: "string", required: true },
+    value: { type: "string", required: true }
+  }, "none"),
   insert: seq(
     terminal("insert", {
       "after-block-id": { type: "string", required: false },
@@ -9371,73 +9388,35 @@ var GRAMMAR = {
       "block-id": { type: "string", required: true }
     }),
     oneOrMore("block")
-  )
+  ),
+  move: terminal("move", {
+    "block-id": { type: "string", required: false },
+    "block-ids": { type: "string", required: false },
+    "from-block-id": { type: "string", required: false },
+    "to-block-id": { type: "string", required: false },
+    "after-block-id": { type: "string", required: false },
+    "before-block-id": { type: "string", required: false },
+    "at-start": { type: "boolean", required: false },
+    "at-end": { type: "boolean", required: false }
+  }, "none")
 };
-var GrammarCompiler = class {
-  rules;
-  constructor(grammar) {
-    this.rules = grammar;
-  }
-  /**
-   * Validate an element matches a rule
-   */
-  validate(element, ruleName) {
-    const rule = this.rules[ruleName];
-    if (!rule) throw new Error(`Unknown rule: ${ruleName}`);
-    return this.matchesRule(element, rule);
-  }
-  matchesRule(element, rule) {
-    switch (rule.type) {
-      case "terminal":
-        return element === rule.element;
-      case "choice":
-        return rule.rules.some((r) => this.matchesRule(element, r));
-      case "ref":
-        return this.matchesRule(element, this.rules[rule.name]);
-      // Sequence, repeat, optional need full AST context
-      default:
-        return false;
-    }
-  }
-  /**
-   * Get all terminal elements from the grammar
-   */
-  getElements() {
-    const elements = /* @__PURE__ */ new Set();
-    const visit = (rule) => {
-      switch (rule.type) {
-        case "terminal":
-          if (!rule.element.startsWith("_")) {
-            elements.add(rule.element);
-          }
-          break;
-        case "sequence":
-        case "choice":
-          rule.rules.forEach(visit);
-          break;
-        case "repeat":
-        case "optional":
-          visit(rule.rule);
-          break;
-        case "ref":
-          visit(this.rules[rule.name]);
-          break;
-      }
-    };
-    Object.values(this.rules).forEach(visit);
-    return elements;
-  }
-  /**
-   * Generate TypeScript types from grammar
-   */
-  generateTypes() {
-    return `// Generated types from grammar`;
-  }
+
+// document/grammars/index.ts
+var GRAMMAR = {
+  // Root types
+  root: choice(
+    "document",
+    "agent",
+    "diff"
+  ),
+  // Merge all grammar rules
+  ...DOCUMENT_GRAMMAR,
+  ...AGENT_GRAMMAR,
+  ...DIFF_GRAMMAR
 };
-var grammarCompiler = new GrammarCompiler(GRAMMAR);
 
 // document/grammar-compiler.ts
-var GrammarCompiler2 = class {
+var GrammarCompiler = class {
   grammar;
   compiled = null;
   constructor(grammar) {
@@ -9678,7 +9657,7 @@ var GrammarCompiler2 = class {
 };
 
 // document/parser-grammar.ts
-var compiler = new GrammarCompiler2(GRAMMAR);
+var compiler = new GrammarCompiler(GRAMMAR);
 var compiled = compiler.compile();
 function parseXML(xmlString) {
   if (!xmlString || !xmlString.trim()) {
@@ -9805,14 +9784,14 @@ function parseEditOperation(element) {
   switch (element.name) {
     case "edit:prop":
       return {
-        type: "edit-prop",
+        type: "edit:attr",
         blockId: attrs["block-id"],
         name: attrs.name,
         value: attrs.value
       };
     case "edit:content":
       return {
-        type: "edit-content",
+        type: "edit:content",
         blockId: attrs["block-id"],
         content: parseRichContent(element)
       };
@@ -10379,7 +10358,11 @@ function serializeRichContent(content) {
         return {
           type: "element",
           name: "annotation",
-          attributes: item.annotation,
+          attributes: {
+            ...item.annotation.title && { title: String(item.annotation.title) },
+            ...item.annotation.comment && { comment: String(item.annotation.comment) },
+            ...item.annotation.confidence !== void 0 && { confidence: String(item.annotation.confidence) }
+          },
           elements: serializeRichContent(item.content)
         };
       default:
@@ -10428,7 +10411,7 @@ function serializeMetadata(metadata) {
 }
 function serializeEditOperation(operation) {
   switch (operation.type) {
-    case "edit-prop":
+    case "edit:attr":
       return {
         type: "element",
         name: "edit:prop",
@@ -10438,7 +10421,7 @@ function serializeEditOperation(operation) {
           value: operation.value
         }
       };
-    case "edit-content":
+    case "edit:content":
       return {
         type: "element",
         name: "edit:content",
@@ -11152,6 +11135,608 @@ function parseCustomTool(document) {
   return null;
 }
 
+// document/diff-applier.ts
+import { v4 as uuidv42 } from "uuid";
+function applyDiff(blocks, operations) {
+  try {
+    let result = [...blocks];
+    for (const operation of operations) {
+      switch (operation.type) {
+        case "edit:attr":
+          result = applyEditAttr(result, operation);
+          break;
+        case "edit:content":
+          result = applyEditContent(result, operation);
+          break;
+        case "edit:params":
+          result = applyEditParams(result, operation);
+          break;
+        case "edit:id":
+          result = applyEditId(result, operation);
+          break;
+        case "insert":
+          result = applyInsert(result, operation);
+          break;
+        case "delete":
+          result = applyDelete(result, operation);
+          break;
+        case "replace":
+          result = applyReplace(result, operation);
+          break;
+        case "move":
+          result = applyMove(result, operation);
+          break;
+        default:
+          throw new Error(`Unknown operation type: ${operation.type}`);
+      }
+    }
+    return { success: true, blocks: result };
+  } catch (error) {
+    return {
+      success: false,
+      blocks,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+function applyEditAttr(blocks, op) {
+  let found = false;
+  const result = blocks.map((block) => {
+    if (block.id === op.blockId) {
+      found = true;
+      return {
+        ...block,
+        props: { ...block.props || {}, [op.name]: op.value }
+      };
+    }
+    if ("children" in block && block.children && block.children.length > 0) {
+      const updatedChildren = applyEditAttr(block.children, op);
+      if (!found && updatedChildren !== block.children) {
+        found = true;
+      }
+      return { ...block, children: updatedChildren };
+    }
+    return block;
+  });
+  if (!found) {
+    throw new Error(`Block not found: ${op.blockId}`);
+  }
+  return result;
+}
+function applyEditContent(blocks, op) {
+  let found = false;
+  const result = blocks.map((block) => {
+    if (block.id === op.blockId) {
+      found = true;
+      if ("content" in block) {
+        return { ...block, content: op.content };
+      } else {
+        throw new Error(`Block ${op.blockId} is not a content block`);
+      }
+    }
+    if ("children" in block && block.children && block.children.length > 0) {
+      const updatedChildren = applyEditContent(block.children, op);
+      if (!found && updatedChildren !== block.children) {
+        found = true;
+      }
+      return { ...block, children: updatedChildren };
+    }
+    return block;
+  });
+  if (!found) {
+    throw new Error(`Block not found: ${op.blockId}`);
+  }
+  return result;
+}
+function applyEditParams(blocks, op) {
+  let found = false;
+  const result = blocks.map((block) => {
+    if (block.id === op.blockId) {
+      found = true;
+      if ("parameters" in block) {
+        return { ...block, parameters: op.params };
+      } else {
+        throw new Error(`Block ${op.blockId} is not an executable block`);
+      }
+    }
+    if ("children" in block && block.children && block.children.length > 0) {
+      const updatedChildren = applyEditParams(block.children, op);
+      if (!found && updatedChildren !== block.children) {
+        found = true;
+      }
+      return { ...block, children: updatedChildren };
+    }
+    return block;
+  });
+  if (!found) {
+    throw new Error(`Block not found: ${op.blockId}`);
+  }
+  return result;
+}
+function applyEditId(blocks, op) {
+  let found = false;
+  const result = blocks.map((block) => {
+    if (block.id === op.blockId) {
+      found = true;
+      return { ...block, id: op.newId };
+    }
+    if ("children" in block && block.children && block.children.length > 0) {
+      const updatedChildren = applyEditId(block.children, op);
+      if (!found && updatedChildren !== block.children) {
+        found = true;
+      }
+      return { ...block, children: updatedChildren };
+    }
+    return block;
+  });
+  if (!found) {
+    throw new Error(`Block not found: ${op.blockId}`);
+  }
+  return result;
+}
+function applyInsert(blocks, op) {
+  const positionCount = [op.atStart, op.atEnd, op.afterBlockId, op.beforeBlockId].filter(Boolean).length;
+  if (positionCount !== 1) {
+    throw new Error("Insert operation must specify exactly one position");
+  }
+  const blocksToInsert = op.blocks.map((block) => ({
+    ...block,
+    id: block.id || uuidv42()
+  }));
+  if (op.atStart) {
+    return [...blocksToInsert, ...blocks];
+  }
+  if (op.atEnd) {
+    return [...blocks, ...blocksToInsert];
+  }
+  const result = [];
+  let inserted = false;
+  for (const block of blocks) {
+    if (op.beforeBlockId && block.id === op.beforeBlockId) {
+      result.push(...blocksToInsert);
+      inserted = true;
+    }
+    result.push(block);
+    if (op.afterBlockId && block.id === op.afterBlockId) {
+      result.push(...blocksToInsert);
+      inserted = true;
+    }
+  }
+  if (!inserted) {
+    throw new Error(`Could not find anchor block for insert operation`);
+  }
+  return result;
+}
+function applyDelete(blocks, op) {
+  return blocks.filter((block) => block.id !== op.blockId).map((block) => {
+    if ("children" in block && block.children && block.children.length > 0) {
+      return { ...block, children: applyDelete(block.children, op) };
+    }
+    return block;
+  });
+}
+function applyReplace(blocks, op) {
+  const replacementBlocks = op.blocks.map((block, index) => {
+    const newId = op.blocks.length === 1 && index === 0 ? op.blockId : block.id || uuidv42();
+    return {
+      ...block,
+      id: newId
+    };
+  });
+  const result = [];
+  let replaced = false;
+  for (const block of blocks) {
+    if (block.id === op.blockId) {
+      result.push(...replacementBlocks);
+      replaced = true;
+    } else {
+      result.push(block);
+    }
+  }
+  if (!replaced) {
+    throw new Error(`Could not find block ${op.blockId} to replace`);
+  }
+  return result;
+}
+function applyMove(blocks, op) {
+  let blocksToMove = [];
+  let remainingBlocks = [];
+  if (op.blockId) {
+    const blockToMove = findBlockById(blocks, op.blockId);
+    if (!blockToMove) {
+      throw new Error(`Block not found: ${op.blockId}`);
+    }
+    blocksToMove = [blockToMove];
+    remainingBlocks = blocks.filter((b) => b.id !== op.blockId);
+  } else if (op.blockIds) {
+    const ids = op.blockIds.split(",").map((id) => id.trim());
+    for (const id of ids) {
+      const block = findBlockById(blocks, id);
+      if (!block) {
+        throw new Error(`Block not found: ${id}`);
+      }
+      blocksToMove.push(block);
+    }
+    remainingBlocks = blocks.filter((b) => !ids.includes(b.id));
+  } else if (op.fromBlockId && op.toBlockId) {
+    const fromIndex = blocks.findIndex((b) => b.id === op.fromBlockId);
+    const toIndex = blocks.findIndex((b) => b.id === op.toBlockId);
+    if (fromIndex === -1) {
+      throw new Error(`Block not found: ${op.fromBlockId}`);
+    }
+    if (toIndex === -1) {
+      throw new Error(`Block not found: ${op.toBlockId}`);
+    }
+    const startIndex = Math.min(fromIndex, toIndex);
+    const endIndex = Math.max(fromIndex, toIndex);
+    blocksToMove = blocks.slice(startIndex, endIndex + 1);
+    remainingBlocks = [
+      ...blocks.slice(0, startIndex),
+      ...blocks.slice(endIndex + 1)
+    ];
+  } else {
+    throw new Error("Move operation must specify blockId, blockIds, or fromBlockId/toBlockId");
+  }
+  const insertOp = {
+    type: "insert",
+    afterBlockId: op.afterBlockId,
+    beforeBlockId: op.beforeBlockId,
+    atStart: op.atStart,
+    atEnd: op.atEnd,
+    blocks: blocksToMove
+  };
+  return applyInsert(remainingBlocks, insertOp);
+}
+function findBlockById(blocks, id) {
+  for (const block of blocks) {
+    if (block.id === id) {
+      return block;
+    }
+    if ("children" in block && block.children) {
+      const found = findBlockById(block.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+// document/blocknote-converter.ts
+function blockNoteToIdyllic(blockNoteBlocks) {
+  return blockNoteBlocks.map(convertBlockNoteBlock);
+}
+function idyllicToBlockNote(idyllicBlocks) {
+  return idyllicBlocks.map(convertIdyllicBlock);
+}
+function convertBlockNoteBlock(bnBlock) {
+  const { id, type, props, content, children } = bnBlock;
+  if (type === "trigger") {
+    return {
+      id,
+      type: "trigger",
+      tool: props.trigger || "",
+      parameters: props.params ? JSON.parse(props.params) : {},
+      instructions: Array.isArray(content) ? convertBlockNoteContent(content) : [],
+      metadata: {
+        enabled: props.enabled,
+        modelId: props.modelId
+      }
+    };
+  }
+  if (type === "tool") {
+    return {
+      id,
+      type: "tool",
+      content: [],
+      // Tool description would go here
+      props: {
+        title: props.title,
+        icon: props.icon,
+        toolDefinition: props.toolDefinition
+      },
+      children: children.map(convertBlockNoteBlock)
+    };
+  }
+  if (type === "table") {
+    return {
+      id,
+      type: "data",
+      // Tables map to data blocks in Idyllic
+      content: [{ type: "text", text: JSON.stringify(content) }],
+      props: {
+        title: "Table",
+        originalType: "table",
+        ...props
+      },
+      children: []
+    };
+  }
+  if (type === "functionCall") {
+    return {
+      id,
+      type: "function_call",
+      tool: props.tool || "",
+      parameters: props.params ? JSON.parse(props.params) : {},
+      result: {
+        success: !props.error,
+        data: props.response || void 0,
+        error: props.error || void 0
+      },
+      instructions: Array.isArray(content) && content.length > 0 ? convertBlockNoteContent(content) : [],
+      metadata: {
+        modelId: props.modelId
+      }
+    };
+  }
+  const typeMapping = {
+    "paragraph": "paragraph",
+    "heading": "heading",
+    "bulletListItem": "bulletListItem",
+    "numberedListItem": "numberedListItem",
+    "checkListItem": "checklistItem",
+    "quote": "quote",
+    "codeBlock": "code",
+    "separator": "separator"
+  };
+  const idyllicType = typeMapping[type] || "paragraph";
+  const idyllicContent = Array.isArray(content) && content.length > 0 ? convertBlockNoteContent(content) : [{ type: "text", text: "" }];
+  const block = {
+    id,
+    type: idyllicType,
+    content: idyllicContent,
+    children: children.map(convertBlockNoteBlock)
+  };
+  if (Object.keys(props).length > 0) {
+    block.props = { ...props };
+  }
+  return block;
+}
+function convertBlockNoteContent(content) {
+  return content.map((item) => {
+    if (item.type === "text") {
+      const textContent = {
+        type: "text",
+        text: item.text || ""
+      };
+      if (item.styles && Object.keys(item.styles).length > 0) {
+        const styles = [];
+        if (item.styles.bold) styles.push("bold");
+        if (item.styles.italic) styles.push("italic");
+        if (item.styles.underline) styles.push("underline");
+        if (item.styles.strikethrough) styles.push("strikethrough");
+        if (item.styles.code) styles.push("code");
+        if (styles.length > 0) {
+          textContent.styles = styles;
+        }
+      }
+      return textContent;
+    }
+    if (item.type === "mention" && item.props) {
+      const mention = {
+        type: "mention",
+        mentionType: mapMentionType(item.props.mentionType),
+        id: item.props.id,
+        label: item.props.label
+      };
+      return mention;
+    }
+    if (item.type === "link" && item.props) {
+      const link = {
+        type: "link",
+        href: item.props.href || "",
+        content: item.props.content ? convertBlockNoteContent(item.props.content) : []
+      };
+      return link;
+    }
+    return {
+      type: "text",
+      text: JSON.stringify(item)
+    };
+  });
+}
+function mapMentionType(bnType) {
+  switch (bnType) {
+    case "user":
+      return "user";
+    case "document":
+      return "document";
+    case "agent":
+      return "agent";
+    case "tool":
+      return "custom";
+    // Tools are custom mentions in Idyllic
+    default:
+      return "custom";
+  }
+}
+function convertIdyllicBlock(block) {
+  const { id } = block;
+  if (isExecutableBlock(block)) {
+    if (block.type === "trigger") {
+      return {
+        id,
+        type: "trigger",
+        props: {
+          trigger: block.tool,
+          params: JSON.stringify(block.parameters),
+          enabled: block.metadata?.enabled ?? true,
+          modelId: block.metadata?.modelId
+        },
+        content: block.instructions && block.instructions.length > 0 ? convertIdyllicContent(block.instructions) : [{ type: "text", text: "", styles: {} }],
+        children: []
+      };
+    }
+    if (block.type === "function_call") {
+      return {
+        id,
+        type: "functionCall",
+        props: {
+          tool: block.tool,
+          params: JSON.stringify(block.parameters),
+          response: block.result?.data ? JSON.stringify(block.result.data) : "",
+          error: block.result?.error ? JSON.stringify(block.result.error) : "",
+          modelId: block.metadata?.modelId
+        },
+        content: block.instructions && block.instructions.length > 0 ? convertIdyllicContent(block.instructions) : [{ type: "text", text: "", styles: {} }],
+        children: []
+      };
+    }
+  }
+  const contentBlock = block;
+  if (contentBlock.type === "tool") {
+    return {
+      id,
+      type: "tool",
+      props: {
+        title: contentBlock.props?.title || "Tool",
+        icon: contentBlock.props?.icon || "\u{1F527}",
+        toolDefinition: contentBlock.props?.toolDefinition || ""
+      },
+      content: [],
+      children: contentBlock.children ? contentBlock.children.map(convertIdyllicBlock) : []
+    };
+  }
+  if (contentBlock.type === "data" && contentBlock.props?.originalType === "table") {
+    try {
+      const firstContent = contentBlock.content[0];
+      const tableData = JSON.parse(
+        firstContent && firstContent.type === "text" ? firstContent.text : "{}"
+      );
+      return {
+        id,
+        type: "table",
+        props: { textColor: contentBlock.props.textColor || "default" },
+        content: tableData,
+        children: []
+      };
+    } catch {
+    }
+  }
+  const typeMapping = {
+    "paragraph": "paragraph",
+    "heading": "heading",
+    "bulletListItem": "bulletListItem",
+    "numberedListItem": "numberedListItem",
+    "checklistItem": "checkListItem",
+    "quote": "quote",
+    "code": "codeBlock",
+    "separator": "separator",
+    "data": "paragraph"
+    // Generic data blocks become paragraphs
+  };
+  const bnType = typeMapping[contentBlock.type] || "paragraph";
+  const bnProps = {};
+  if (bnType !== "separator" && bnType !== "codeBlock") {
+    bnProps.textColor = contentBlock.props?.textColor || "default";
+    bnProps.textAlignment = contentBlock.props?.textAlignment || "left";
+    bnProps.backgroundColor = contentBlock.props?.backgroundColor || "default";
+  }
+  if (contentBlock.type === "heading") {
+    bnProps.level = contentBlock.props?.level || 1;
+  } else if (contentBlock.type === "checklistItem") {
+    bnProps.checked = contentBlock.props?.checked || false;
+  } else if (contentBlock.type === "code") {
+    bnProps.language = contentBlock.props?.language || "text";
+  } else if (contentBlock.type === "separator") {
+    bnProps.text = contentBlock.props?.text || "";
+  }
+  if (contentBlock.props) {
+    Object.keys(contentBlock.props).forEach((key) => {
+      if (!bnProps[key]) {
+        bnProps[key] = contentBlock.props[key];
+      }
+    });
+  }
+  const bnContent = convertIdyllicContent(contentBlock.content);
+  const finalContent = bnContent.length > 0 ? bnContent : [{ type: "text", text: "", styles: {} }];
+  return {
+    id,
+    type: bnType,
+    props: bnProps,
+    content: finalContent,
+    children: contentBlock.children ? contentBlock.children.map(convertIdyllicBlock) : []
+  };
+}
+function convertIdyllicContent(content) {
+  return content.map((item) => {
+    if (item.type === "text") {
+      const bnContent = {
+        type: "text",
+        text: item.text,
+        styles: {}
+      };
+      if (item.styles) {
+        item.styles.forEach((style) => {
+          bnContent.styles[style] = true;
+        });
+      }
+      return bnContent;
+    }
+    if (item.type === "mention") {
+      return {
+        type: "mention",
+        props: {
+          id: item.id,
+          label: item.label || "",
+          iconUrl: "",
+          mentionId: generateMentionId(),
+          parameters: "",
+          mentionType: item.mentionType === "custom" ? "tool" : item.mentionType
+        }
+      };
+    }
+    if (item.type === "link") {
+      return {
+        type: "link",
+        props: {
+          href: item.href,
+          content: convertIdyllicContent(item.content)
+        }
+      };
+    }
+    if (item.type === "variable") {
+      return {
+        type: "mention",
+        props: {
+          id: `var:${item.name}`,
+          label: item.name,
+          iconUrl: "",
+          mentionId: generateMentionId(),
+          parameters: "",
+          mentionType: "custom"
+        }
+      };
+    }
+    if (item.type === "annotation") {
+      const annotatedContent = convertIdyllicContent(item.content);
+      return {
+        type: "text",
+        text: annotatedContent.map((c) => c.text).join(""),
+        styles: { backgroundColor: "yellow" }
+      };
+    }
+    return {
+      type: "text",
+      text: `[${item.type || "unknown"}]`,
+      styles: {}
+    };
+  });
+}
+function generateMentionId() {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+}
+function testIsomorphism(original) {
+  const idyllic = blockNoteToIdyllic(original);
+  const roundTripped = idyllicToBlockNote(idyllic);
+  const differences = [];
+  if (original.length !== roundTripped.length) {
+    differences.push(`Block count mismatch: ${original.length} vs ${roundTripped.length}`);
+  }
+  return {
+    isIsomorphic: differences.length === 0,
+    differences
+  };
+}
+
 // agent/agent.ts
 import { generateText as generateText3, streamText } from "ai";
 
@@ -11228,7 +11813,7 @@ ${formatted}
 };
 
 // agent/agent.ts
-import { v4 as uuidv42 } from "uuid";
+import { v4 as uuidv43 } from "uuid";
 
 // agent/system-prompt.ts
 function buildSystemPrompt(agent, availableTools) {
@@ -11550,7 +12135,7 @@ var Agent = class {
         execute: async (params) => {
           console.log(`\u{1F527} Executing tool: ${name17}`);
           const context = {
-            blockId: uuidv42(),
+            blockId: uuidv43(),
             documentId: this.config.document.id,
             canEdit: false,
             user: { id: this.context.userId || "cli-user" },
@@ -11578,21 +12163,25 @@ var Agent = class {
             }
             this.memory.add({
               type: "tool",
-              toolCalls: [{
-                name: name17,
-                args: params,
-                result: finalResult
-              }]
+              toolCalls: [
+                {
+                  name: name17,
+                  args: params,
+                  result: finalResult
+                }
+              ]
             });
             return finalResult;
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             this.memory.add({
               type: "tool",
-              toolCalls: [{
-                name: name17,
-                args: params
-              }],
+              toolCalls: [
+                {
+                  name: name17,
+                  args: params
+                }
+              ],
               error: errorMessage
             });
             throw error;
@@ -11643,7 +12232,7 @@ var Agent = class {
       }
       return {
         message: {
-          id: uuidv42(),
+          id: uuidv43(),
           role: "assistant",
           content: result.text,
           createdAt: /* @__PURE__ */ new Date()
@@ -11662,6 +12251,7 @@ var Agent = class {
   }
   /**
    * Execute a chat message (streaming)
+   * Returns streamText result that can be used with toDataStreamResponse()
    */
   async chatStream(messages, options) {
     const userMessage = messages[messages.length - 1]?.content;
@@ -11685,22 +12275,19 @@ var Agent = class {
             const originalToolName = fromAzureFunctionName(chunk.toolName);
             options.onToolCall(originalToolName, chunk.args);
           }
+        },
+        onFinish: async ({ text, toolCalls, usage, finishReason }) => {
+          activity.assistantMessage = text;
+          if (toolCalls && toolCalls.length > 0) {
+            activity.toolCalls = toolCalls.map((tc) => ({
+              name: fromAzureFunctionName(tc.toolName),
+              args: tc.args,
+              result: tc.result
+            }));
+          }
         }
       });
-      let fullText = "";
-      const toolCalls = [];
-      for await (const chunk of result.textStream) {
-        fullText += chunk;
-      }
-      activity.assistantMessage = fullText;
-      if (toolCalls.length > 0) {
-        activity.toolCalls = toolCalls;
-      }
-      return {
-        text: fullText,
-        usage: await result.usage,
-        finishReason: await result.finishReason
-      };
+      return result;
     } catch (error) {
       this.memory.add({
         type: "chat",
@@ -11740,8 +12327,10 @@ export {
   Agent,
   DocumentExecutor,
   GRAMMAR,
-  GrammarCompiler2 as GrammarCompiler,
+  GrammarCompiler,
+  applyDiff,
   applyResolvedVariables,
+  blockNoteToIdyllic,
   buildDetailedSystemPrompt,
   buildSystemPrompt,
   buildToolName,
@@ -11760,6 +12349,7 @@ export {
   fromAzureFunctionName,
   getExecutableBlocks,
   getModel,
+  idyllicToBlockNote,
   interpolateContent,
   isContentBlock,
   isExecutableBlock,
@@ -11772,6 +12362,7 @@ export {
   parseXML,
   resolveVariables,
   serializeToXML,
+  testIsomorphism,
   toAzureFunctionName,
   traverseBlocks,
   validateDocument,

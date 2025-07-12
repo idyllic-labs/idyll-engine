@@ -47,6 +47,14 @@ export * from './document/variable-resolution';
 // Custom tool execution
 export * from './document/custom-tool-executor';
 
+// Diff system
+export { applyDiff } from './document/diff-applier';
+export type { DiffResult } from './document/diff-applier';
+
+// BlockNote converter
+export { blockNoteToIdyllic, idyllicToBlockNote, testIsomorphism } from './document/blocknote-converter';
+export type { BlockNoteBlock, BlockNoteContent, BlockNoteTableContent } from './document/blocknote-converter';
+
 // Agent system
 export { Agent } from './agent/agent';
 export { ActivityMemory } from './agent/memory';

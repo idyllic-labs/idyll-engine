@@ -23,8 +23,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "cli": "bun run cli/idyll-cli.ts",
-    "agent": "bun run cli/agent-cli.ts",
-    "agent:ui": "bun run cli/agent-cli-blessed.ts"
+    "agent": "bun run cli/agent-cli.ts"
   },
   "dependencies": {
     "date-fns": "^3.0.0",
@@ -38,11 +37,10 @@
     "@ai-sdk/azure": "^1.3.23",
     "@ai-sdk/google": "^1.2.19",
     "@ai-sdk/openai": "^1.3.23",
-    "@types/blessed": "^0.1.25",
     "@types/node": "^20.0.0",
     "@types/uuid": "^10.0.0",
-    "blessed": "^0.1.81",
     "chalk": "^5.4.1",
+    "prettier": "^3.6.2",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
     "vitest": "^1.0.0"
