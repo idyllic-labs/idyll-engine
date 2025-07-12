@@ -39,9 +39,9 @@ const compiled = compiler.compile();
 // ============================================
 
 /**
- * Parse XML string and determine root type
+ * Parse XML string into AST - determines document type automatically
  */
-export function parseXML(
+export function parseXmlToAst(
   xmlString: string
 ): IdyllDocument | AgentDocument | DiffDocument {
   if (!xmlString || !xmlString.trim()) {
@@ -649,9 +649,9 @@ function parseInlineElement(
 // ============================================
 
 /**
- * Serialize any document type to XML string
+ * Serialize AST document to XML string
  */
-export function serializeToXML(
+export function serializeAstToXml(
   document: IdyllDocument | AgentDocument | DiffDocument
 ): string {
   let root: xml2js.Element;
@@ -1113,3 +1113,17 @@ function serializeEditOperation(operation: EditOperation): xml2js.Element {
       throw new Error(`Unknown operation type`);
   }
 }
+
+// ============================================
+// Backward Compatibility Exports
+// ============================================
+
+/**
+ * @deprecated Use parseXmlToAst instead for clarity
+ */
+export const parseXML = parseXmlToAst;
+
+/**
+ * @deprecated Use serializeAstToXml instead for clarity  
+ */
+export const serializeToXML = serializeAstToXml;

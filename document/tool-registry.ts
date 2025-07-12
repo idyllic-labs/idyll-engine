@@ -8,6 +8,9 @@
 import { z } from 'zod';
 import type { ToolRegistry, ToolDefinition, BlockExecutionContext } from './execution-types';
 
+// Re-export types for external use
+export type { ToolRegistry, ToolDefinition } from './execution-types';
+
 /**
  * Create a type-safe tool registry
  */

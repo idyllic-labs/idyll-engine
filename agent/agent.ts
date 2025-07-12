@@ -13,6 +13,7 @@ import {
   AgentExecuteResult,
   AgentActivity,
 } from "./types";
+import type { AgentDocument } from '../document/ast';
 import { ActivityMemory } from "./memory";
 import { ToolRegistry } from "../document/tool-registry";
 import { BlockExecutionContext } from "../document/execution-types";
@@ -78,8 +79,8 @@ export class Agent {
    * Initialize tools for AI SDK
    */
   private initializeTools() {
-    // Extract custom tools from agent document
-    const customTools = extractCustomTools(
+    // Extract custom tools from agent document if available
+    const customTools = this.config.document ? extractCustomTools(
       this.config.document,
       this.config.tools,
       () => {
@@ -91,7 +92,7 @@ export class Agent {
           ? lastUserMessage.content
           : JSON.stringify(lastUserMessage?.content || "");
       }
-    );
+    ) : {};
 
     // Merge base tools with custom tools
     const allTools = mergeToolRegistries(this.config.tools, customTools);
@@ -112,7 +113,7 @@ export class Agent {
           const context: BlockExecutionContext = {
             currentBlockId: uuidv4(),
             previousResults: new Map(),
-            document: this.config.document,
+            document: this.config.document || { id: 'unknown', blocks: [] },
           };
 
           try {
@@ -182,7 +183,7 @@ export class Agent {
     const toolNames = Object.keys(this.aiTools);
 
     return buildDetailedSystemPrompt(
-      this.config.document,
+      this.config.document || { type: 'agent', id: 'unknown', blocks: [] },
       toolNames,
       memoryContext
     );
@@ -211,7 +212,7 @@ export class Agent {
       });
 
       const result = await generateText({
-        model: getModel(this.config.document.model!),
+        model: getModel(this.config.document?.model || this.config.model || 'gpt-4'),
         system: this.getSystemPrompt(),
         messages,
         tools: this.aiTools,
@@ -279,7 +280,7 @@ export class Agent {
       });
 
       const result = await streamText({
-        model: getModel(this.config.document.model!),
+        model: getModel(this.config.document?.model || this.config.model || 'gpt-4'),
         system: this.getSystemPrompt(),
         messages,
         tools: this.aiTools,
@@ -295,7 +296,7 @@ export class Agent {
             options.onToolCall(originalToolName, chunk.args);
           }
         },
-        onFinish: async ({ text, toolCalls }) => {
+        onFinish: async ({ text, toolCalls, usage, finishReason }) => {
           // Update activity when stream finishes
           activity.assistantMessage = text;
           if (toolCalls && toolCalls.length > 0) {
@@ -303,6 +304,19 @@ export class Agent {
               name: fromAzureFunctionName(tc.toolName),
               args: tc.args,
             }));
+          }
+          
+          // Call the external onFinish callback if provided
+          if (options?.onFinish) {
+            await options.onFinish({
+              text,
+              toolCalls: toolCalls?.map((tc) => ({
+                ...tc,
+                toolName: fromAzureFunctionName(tc.toolName),
+              })),
+              usage,
+              finishReason,
+            });
           }
         },
       });

@@ -8,7 +8,7 @@
 export * from './document/ast';
 
 // Document parsing and serialization
-export { parseXML, serializeToXML } from './document/parser-grammar';
+export { parseXmlToAst, serializeAstToXml, parseXML, serializeToXML } from './document/parser-grammar';
 
 // Document execution
 export { DocumentExecutor } from './document/executor';

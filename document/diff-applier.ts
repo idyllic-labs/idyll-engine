@@ -93,7 +93,7 @@ function applyEditAttr(blocks: Block[], op: EditAttrOperation): Block[] {
       found = true;
       return { 
         ...block, 
-        props: { ...(block.props || {}), [op.name]: op.value } 
+        props: { ...((block as any).props || {}), [op.name]: op.value } 
       };
     }
     
@@ -310,7 +310,7 @@ function applyMove(blocks: Block[], op: MoveOperation): Block[] {
     remainingBlocks = blocks.filter(b => b.id !== op.blockId);
   } else if (op.blockIds) {
     // Multiple blocks move
-    const ids = op.blockIds.split(',').map(id => id.trim());
+    const ids = op.blockIds;
     for (const id of ids) {
       const block = findBlockById(blocks, id);
       if (!block) {

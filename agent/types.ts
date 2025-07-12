@@ -4,7 +4,7 @@
 
 import { Message, CoreTool, LanguageModelUsage } from 'ai';
 import { AgentDocument } from '../document/ast';
-import { ToolRegistry } from '../document/tool-registry';
+import type { ToolRegistry } from '../document/tool-registry';
 
 /**
  * Agent configuration
@@ -56,6 +56,16 @@ export interface AgentExecuteOptions {
   temperature?: number;
   maxSteps?: number;
   stream?: boolean;
+  onFinish?: (result: {
+    text: string;
+    toolCalls?: Array<{
+      toolName: string;
+      args: any;
+      result?: any;
+    }>;
+    usage?: any;
+    finishReason?: string;
+  }) => Promise<void> | void;
 }
 
 /**

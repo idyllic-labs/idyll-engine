@@ -30,6 +30,1593 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// document/ast.ts
+function isContentBlock(block) {
+  return !isExecutableBlock(block);
+}
+function isExecutableBlock(block) {
+  return block.type === "function_call" || block.type === "trigger";
+}
+function isTextContent(content) {
+  return content.type === "text";
+}
+function isMention(content) {
+  return content.type === "mention";
+}
+function isVariable(content) {
+  return content.type === "variable";
+}
+function* traverseBlocks(blocks) {
+  for (const block of blocks) {
+    yield block;
+    if ("children" in block && block.children) {
+      yield* traverseBlocks(block.children);
+    }
+  }
+}
+function findBlock(blocks, id) {
+  for (const block of traverseBlocks(blocks)) {
+    if (block.id === id) {
+      return block;
+    }
+  }
+  return void 0;
+}
+function getExecutableBlocks(blocks) {
+  const executable = [];
+  for (const block of traverseBlocks(blocks)) {
+    if (isExecutableBlock(block)) {
+      executable.push(block);
+    }
+  }
+  return executable;
+}
+function extractMentions(blocks) {
+  const mentions = [];
+  function extractFromContent(content) {
+    for (const item of content) {
+      if (isMention(item)) {
+        mentions.push(item);
+      } else if ("content" in item && Array.isArray(item.content)) {
+        extractFromContent(item.content);
+      }
+    }
+  }
+  for (const block of traverseBlocks(blocks)) {
+    if ("content" in block && Array.isArray(block.content)) {
+      extractFromContent(block.content);
+    }
+    if (isExecutableBlock(block) && block.instructions) {
+      extractFromContent(block.instructions);
+    }
+  }
+  return mentions;
+}
+function extractVariables(blocks) {
+  const variables = [];
+  function extractFromContent(content) {
+    for (const item of content) {
+      if (isVariable(item)) {
+        variables.push(item);
+      } else if ("content" in item && Array.isArray(item.content)) {
+        extractFromContent(item.content);
+      }
+    }
+  }
+  for (const block of traverseBlocks(blocks)) {
+    if ("content" in block && Array.isArray(block.content)) {
+      extractFromContent(block.content);
+    }
+    if (isExecutableBlock(block) && block.instructions) {
+      extractFromContent(block.instructions);
+    }
+  }
+  return variables;
+}
+var init_ast = __esm({
+  "document/ast.ts"() {
+    "use strict";
+  }
+});
+
+// types.ts
+var IdyllEngineError, ParseError;
+var init_types = __esm({
+  "types.ts"() {
+    "use strict";
+    IdyllEngineError = class extends Error {
+      constructor(message, code, details) {
+        super(message);
+        this.code = code;
+        this.details = details;
+        this.name = "IdyllEngineError";
+      }
+    };
+    ParseError = class extends IdyllEngineError {
+      constructor(message, details) {
+        super(message, "PARSE_ERROR", details);
+        this.name = "ParseError";
+      }
+    };
+  }
+});
+
+// document/grammars/grammar-dsl.ts
+function terminal(element, attrs, content) {
+  return { type: "terminal", element, attributes: attrs, content };
+}
+function seq(...rules) {
+  return {
+    type: "sequence",
+    rules: rules.map((r) => typeof r === "string" ? ref(r) : r)
+  };
+}
+function choice(...rules) {
+  return {
+    type: "choice",
+    rules: rules.map((r) => typeof r === "string" ? ref(r) : r)
+  };
+}
+function repeat(rule, min = 0, max = null) {
+  return {
+    type: "repeat",
+    rule: typeof rule === "string" ? ref(rule) : rule,
+    min,
+    max
+  };
+}
+function optional(rule) {
+  return {
+    type: "optional",
+    rule: typeof rule === "string" ? ref(rule) : rule
+  };
+}
+function ref(name17) {
+  return { type: "ref", name: name17 };
+}
+var zeroOrMore, oneOrMore;
+var init_grammar_dsl = __esm({
+  "document/grammars/grammar-dsl.ts"() {
+    "use strict";
+    zeroOrMore = (rule) => repeat(rule, 0, null);
+    oneOrMore = (rule) => repeat(rule, 1, null);
+  }
+});
+
+// document/grammars/document-grammar.ts
+var DOCUMENT_GRAMMAR;
+var init_document_grammar = __esm({
+  "document/grammars/document-grammar.ts"() {
+    "use strict";
+    init_grammar_dsl();
+    DOCUMENT_GRAMMAR = {
+      // Document root
+      document: seq(
+        terminal("document", {
+          id: { type: "string", required: false },
+          version: { type: "string", required: false },
+          created: { type: "string", required: false },
+          modified: { type: "string", required: false }
+        }),
+        zeroOrMore("block")
+      ),
+      // Blocks
+      block: choice(
+        "content-block",
+        "executable-block",
+        "tool-block"
+      ),
+      "content-block": choice(
+        "paragraph",
+        "heading",
+        "bullet-list-item",
+        "numbered-list-item",
+        "checklist-item",
+        "code",
+        "quote",
+        "separator",
+        "data"
+      ),
+      "executable-block": choice(
+        "function-call",
+        "trigger"
+      ),
+      // Content blocks
+      paragraph: choice(
+        terminal("p", {}, "rich"),
+        terminal("paragraph", {}, "rich")
+        // legacy support
+      ),
+      heading: choice(
+        terminal("h1", {}, "rich"),
+        terminal("h2", {}, "rich"),
+        terminal("h3", {}, "rich"),
+        terminal("h4", {}, "rich"),
+        terminal("h5", {}, "rich"),
+        terminal("h6", {}, "rich"),
+        terminal("heading", {
+          // legacy support
+          level: { type: "number", required: true, validate: (v) => {
+            const num = Number(v);
+            return num >= 1 && num <= 6 ? null : "Level must be 1-6";
+          } }
+        }, "rich")
+      ),
+      // List items (individual blocks, no containers)
+      "bullet-list-item": terminal("bulletlistitem", {}, "rich"),
+      "numbered-list-item": terminal("numberedlistitem", {}, "rich"),
+      "checklist-item": terminal("checklistitem", {
+        checked: { type: "boolean", required: true }
+      }, "rich"),
+      code: terminal("code", {
+        language: { type: "string", required: false }
+      }, "text"),
+      quote: terminal("quote", {
+        author: { type: "string", required: false },
+        source: { type: "string", required: false }
+      }, "rich"),
+      separator: terminal("separator", {}, "none"),
+      data: terminal("data", {
+        title: { type: "string", required: false }
+      }, "text"),
+      // Executable blocks
+      "function-call": seq(
+        terminal("fncall", {
+          "idyll-tool": {
+            type: "string",
+            required: true,
+            // Format: \"module:function\" or just \"function\" (e.g., \"demo:echo\", \"ai:analyzeText\", \"echo\")
+            // Module and function names MUST be valid JS identifiers
+            // For Azure Functions compatibility, transform at adapter layer:
+            // \"module:function\" → \"module--function\" (double hyphen separator)
+            pattern: /^([a-zA-Z_$][a-zA-Z0-9_$]*:)?[a-zA-Z_$][a-zA-Z0-9_$]*$/
+          },
+          modelId: { type: "string", required: false }
+        }),
+        optional("params"),
+        optional("content"),
+        optional("result")
+      ),
+      trigger: seq(
+        terminal("trigger", {
+          "idyll-trigger": {
+            type: "string",
+            required: true,
+            // Format: \"module:trigger\" or just \"trigger\" (e.g., \"time:schedule\", \"webhook:receive\", \"daily\")
+            // Module and trigger names MUST be valid JS identifiers
+            // For Azure Functions compatibility, transform at adapter layer:
+            // \"module:trigger\" → \"module--trigger\" (double hyphen separator)
+            pattern: /^([a-zA-Z_$][a-zA-Z0-9_$]*:)?[a-zA-Z_$][a-zA-Z0-9_$]*$/
+          },
+          enabled: { type: "boolean", default: true }
+        }),
+        optional("params"),
+        optional("content")
+      ),
+      // Tool blocks
+      "tool-block": seq(
+        terminal("tool", {
+          title: { type: "string", required: true },
+          icon: { type: "string", required: false }
+        }),
+        ref("tool-description"),
+        ref("tool-definition")
+      ),
+      "tool-description": terminal("tool:description", {}, "text"),
+      "tool-definition": seq(
+        terminal("tool:definition"),
+        zeroOrMore(choice("content-block", "executable-block"))
+        // no nested tools!
+      ),
+      // Function call children
+      params: seq(
+        terminal("params"),
+        ref("json-content")
+      ),
+      content: seq(
+        terminal("content"),
+        ref("rich-content")
+      ),
+      result: seq(
+        terminal("result"),
+        ref("json-content")
+      ),
+      // Content types
+      "rich-content": zeroOrMore(choice(
+        "text",
+        "styled-text",
+        "mention",
+        "variable",
+        "link",
+        "annotation",
+        "annotated-text",
+        "ai-edit-response"
+      )),
+      "text-content": terminal("_text", {}, "text"),
+      // pseudo-element for plain text
+      "json-content": terminal("_json", {}, "json"),
+      // pseudo-element for JSON
+      // Inline elements
+      "styled-text": choice(
+        seq(choice(terminal("strong"), terminal("b")), ref("rich-content")),
+        seq(choice(terminal("em"), terminal("i")), ref("rich-content")),
+        seq(choice(terminal("u"), terminal("underline")), ref("rich-content")),
+        seq(choice(terminal("s"), terminal("strike"), terminal("del")), ref("rich-content")),
+        seq(choice(terminal("code"), terminal("tt")), ref("rich-content"))
+      ),
+      annotation: seq(
+        terminal("annotation", {
+          title: { type: "string", required: false },
+          comment: { type: "string", required: false },
+          confidence: { type: "number", required: false }
+        }),
+        ref("rich-content")
+      ),
+      mention: choice(
+        terminal("mention:user", {
+          id: { type: "string", required: true },
+          label: { type: "string", required: false }
+        }, "text"),
+        terminal("mention:document", {
+          id: { type: "string", required: true },
+          label: { type: "string", required: false }
+        }, "text"),
+        terminal("mention:agent", {
+          id: { type: "string", required: true },
+          label: { type: "string", required: false }
+        }, "text"),
+        terminal("mention:custom", {
+          id: { type: "string", required: true },
+          type: { type: "string", required: true },
+          label: { type: "string", required: false }
+        }, "text")
+      ),
+      variable: terminal("variable", {
+        name: { type: "string", required: true },
+        prompt: { type: "string", required: false },
+        value: { type: "string", required: false }
+      }, "none"),
+      link: seq(
+        terminal("a", {
+          href: { type: "string", required: true, pattern: /^https?:\/\/.+/ }
+        }),
+        ref("rich-content")
+      ),
+      "annotated-text": seq(
+        terminal("annotatedtext", {
+          annotation: { type: "string", required: true }
+        }),
+        ref("rich-content")
+      ),
+      "ai-edit-response": seq(
+        terminal("aieditresponse", {
+          status: { type: "enum", values: ["pending", "accepted", "rejected"], required: true }
+        }),
+        ref("rich-content")
+      ),
+      text: terminal("_text", {}, "text")
+      // Raw text node
+    };
+  }
+});
+
+// document/grammars/agent-grammar.ts
+var AGENT_GRAMMAR;
+var init_agent_grammar = __esm({
+  "document/grammars/agent-grammar.ts"() {
+    "use strict";
+    init_grammar_dsl();
+    AGENT_GRAMMAR = {
+      // Agent system prompt root
+      agent: seq(
+        terminal("agent", {
+          id: { type: "string", required: false },
+          name: { type: "string", required: false },
+          description: { type: "string", required: false },
+          model: { type: "string", required: false }
+        }),
+        zeroOrMore("block")
+      )
+    };
+  }
+});
+
+// document/grammars/diff-grammar.ts
+var DIFF_GRAMMAR;
+var init_diff_grammar = __esm({
+  "document/grammars/diff-grammar.ts"() {
+    "use strict";
+    init_grammar_dsl();
+    DIFF_GRAMMAR = {
+      // Diff operations root
+      diff: seq(
+        terminal("diff", {
+          targetDocument: { type: "string", required: false },
+          timestamp: { type: "string", required: false }
+        }),
+        oneOrMore("edit-operation")
+      ),
+      // Edit operations
+      "edit-operation": choice(
+        "edit-attr",
+        "edit-content",
+        "edit-params",
+        "edit-id",
+        "insert",
+        "delete",
+        "replace",
+        "move"
+      ),
+      "edit-attr": terminal("edit:attr", {
+        "block-id": { type: "string", required: true },
+        name: { type: "string", required: true },
+        value: { type: "string", required: true }
+      }, "none"),
+      "edit-content": seq(
+        terminal("edit:content", {
+          "block-id": { type: "string", required: true }
+        }),
+        ref("rich-content")
+      ),
+      "edit-params": seq(
+        terminal("edit:params", {
+          "block-id": { type: "string", required: true }
+        }),
+        ref("json-content")
+      ),
+      "edit-id": terminal("edit:id", {
+        "block-id": { type: "string", required: true },
+        value: { type: "string", required: true }
+      }, "none"),
+      insert: seq(
+        terminal("insert", {
+          "after-block-id": { type: "string", required: false },
+          "before-block-id": { type: "string", required: false },
+          "at-start": { type: "boolean", required: false },
+          "at-end": { type: "boolean", required: false }
+        }),
+        oneOrMore("block")
+      ),
+      delete: terminal("delete", {
+        "block-id": { type: "string", required: true }
+      }, "none"),
+      replace: seq(
+        terminal("replace", {
+          "block-id": { type: "string", required: true }
+        }),
+        oneOrMore("block")
+      ),
+      move: terminal("move", {
+        "block-id": { type: "string", required: false },
+        "block-ids": { type: "string", required: false },
+        "from-block-id": { type: "string", required: false },
+        "to-block-id": { type: "string", required: false },
+        "after-block-id": { type: "string", required: false },
+        "before-block-id": { type: "string", required: false },
+        "at-start": { type: "boolean", required: false },
+        "at-end": { type: "boolean", required: false }
+      }, "none")
+    };
+  }
+});
+
+// document/grammars/index.ts
+var GRAMMAR;
+var init_grammars = __esm({
+  "document/grammars/index.ts"() {
+    "use strict";
+    init_grammar_dsl();
+    init_document_grammar();
+    init_agent_grammar();
+    init_diff_grammar();
+    init_document_grammar();
+    init_agent_grammar();
+    init_diff_grammar();
+    init_grammar_dsl();
+    GRAMMAR = {
+      // Root types
+      root: choice(
+        "document",
+        "agent",
+        "diff"
+      ),
+      // Merge all grammar rules
+      ...DOCUMENT_GRAMMAR,
+      ...AGENT_GRAMMAR,
+      ...DIFF_GRAMMAR
+    };
+  }
+});
+
+// document/grammar.ts
+var init_grammar = __esm({
+  "document/grammar.ts"() {
+    "use strict";
+    init_grammars();
+  }
+});
+
+// document/grammar-compiler.ts
+var GrammarCompiler;
+var init_grammar_compiler = __esm({
+  "document/grammar-compiler.ts"() {
+    "use strict";
+    GrammarCompiler = class {
+      grammar;
+      compiled = null;
+      constructor(grammar) {
+        this.grammar = grammar;
+      }
+      /**
+       * Compile the grammar into usable structures
+       */
+      compile() {
+        if (this.compiled) return this.compiled;
+        const elementToType = {};
+        const typeToElements = {};
+        const elementSchemas = {};
+        const blockTypes = /* @__PURE__ */ new Set();
+        const inlineElements = /* @__PURE__ */ new Set();
+        const terminals = this.collectTerminals();
+        for (const [ruleName, terminal2] of terminals) {
+          const element = terminal2.element;
+          if (element.startsWith("_")) continue;
+          const astType = this.inferAstType(element, ruleName);
+          elementToType[element] = astType;
+          if (!typeToElements[astType]) {
+            typeToElements[astType] = [];
+          }
+          typeToElements[astType].push(element);
+          elementSchemas[element] = {
+            element,
+            type: astType,
+            block: this.isBlockRule(ruleName),
+            attributes: terminal2.attributes,
+            content: terminal2.content
+          };
+          if (this.isBlockRule(ruleName)) {
+            blockTypes.add(astType);
+          } else if (this.isInlineRule(ruleName)) {
+            inlineElements.add(element);
+          }
+        }
+        const isValidElement = (element) => element in elementToType;
+        const isValidChild = (parentType, childElement) => {
+          const rule = this.findRuleByType(parentType);
+          if (!rule) return false;
+          return this.isValidInContext(rule, childElement);
+        };
+        const validateAttributes = (element, attrs) => {
+          const schema = elementSchemas[element];
+          if (!schema || !schema.attributes) return [];
+          return this.validateAttrs(attrs, schema.attributes, element);
+        };
+        this.compiled = {
+          elementToType,
+          typeToElements,
+          elementSchemas,
+          isValidElement,
+          isValidChild,
+          validateAttributes,
+          blockTypes,
+          inlineElements
+        };
+        return this.compiled;
+      }
+      /**
+       * Collect all terminal rules with their contexts
+       */
+      collectTerminals() {
+        const terminals = /* @__PURE__ */ new Map();
+        const visited = /* @__PURE__ */ new Set();
+        const visit = (ruleName, rule) => {
+          const key = `${ruleName}:${JSON.stringify(rule)}`;
+          if (visited.has(key)) return;
+          visited.add(key);
+          switch (rule.type) {
+            case "terminal":
+              terminals.set(ruleName, {
+                element: rule.element,
+                attributes: rule.attributes,
+                content: rule.content
+              });
+              break;
+            case "choice":
+            case "sequence":
+              rule.rules.forEach((r, i) => {
+                if (r.type === "ref") {
+                  visit(r.name, this.grammar[r.name]);
+                } else {
+                  visit(`${ruleName}[${i}]`, r);
+                }
+              });
+              break;
+            case "repeat":
+            case "optional":
+              if (rule.rule.type === "ref") {
+                visit(rule.rule.name, this.grammar[rule.rule.name]);
+              } else {
+                visit(`${ruleName}:inner`, rule.rule);
+              }
+              break;
+            case "ref":
+              if (this.grammar[rule.name]) {
+                visit(rule.name, this.grammar[rule.name]);
+              }
+              break;
+          }
+        };
+        for (const [name17, rule] of Object.entries(this.grammar)) {
+          visit(name17, rule);
+        }
+        return terminals;
+      }
+      /**
+       * Infer AST type from element name and rule context
+       */
+      inferAstType(element, ruleName) {
+        const typeMap = {
+          "p": "paragraph",
+          "paragraph": "paragraph",
+          "h1": "heading",
+          "h2": "heading",
+          "h3": "heading",
+          "h4": "heading",
+          "h5": "heading",
+          "h6": "heading",
+          "heading": "heading",
+          "fncall": "function_call",
+          "bulletlistitem": "bulletListItem",
+          "numberedlistitem": "numberedListItem",
+          "checklistitem": "checklistItem",
+          "tool:description": "_tool_description",
+          "tool:definition": "_tool_definition"
+        };
+        return typeMap[element] || element.replace(/[:-]/g, "_");
+      }
+      /**
+       * Check if a rule represents a block element
+       */
+      isBlockRule(ruleName) {
+        return ruleName.includes("block") || ruleName === "paragraph" || ruleName === "heading" || ruleName === "list" || ruleName === "code" || ruleName === "quote" || ruleName === "separator" || ruleName === "tool-block";
+      }
+      /**
+       * Check if a rule represents an inline element
+       */
+      isInlineRule(ruleName) {
+        return ruleName.includes("styled-text") || ruleName === "mention" || ruleName === "variable" || ruleName === "link" || ruleName === "text";
+      }
+      /**
+       * Find a rule that produces the given AST type
+       */
+      findRuleByType(astType) {
+        const ruleMap = {
+          "tool": "tool-block",
+          "list": "list",
+          "function_call": "function-call",
+          "trigger": "trigger"
+        };
+        const ruleName = ruleMap[astType];
+        return ruleName ? this.grammar[ruleName] : null;
+      }
+      /**
+       * Check if an element is valid in a given context
+       */
+      isValidInContext(rule, element) {
+        switch (rule.type) {
+          case "terminal":
+            return rule.element === element;
+          case "choice":
+            return rule.rules.some((r) => this.isValidInContext(r, element));
+          case "sequence":
+            return rule.rules.some((r) => this.isValidInContext(r, element));
+          case "repeat":
+          case "optional":
+            return this.isValidInContext(rule.rule, element);
+          case "ref":
+            const referenced = this.grammar[rule.name];
+            return referenced ? this.isValidInContext(referenced, element) : false;
+          default:
+            return false;
+        }
+      }
+      /**
+       * Validate attributes against schema
+       */
+      validateAttrs(attrs, schema, element) {
+        const errors = [];
+        for (const [name17, def] of Object.entries(schema)) {
+          if (def.required && !(name17 in attrs)) {
+            errors.push({
+              type: "attribute",
+              path: `${element}@${name17}`,
+              message: `Required attribute missing: ${name17}`
+            });
+          }
+        }
+        for (const [name17, value] of Object.entries(attrs)) {
+          const def = schema[name17];
+          if (!def) continue;
+          if (def.type === "enum" && def.values && !def.values.includes(value)) {
+            errors.push({
+              type: "attribute",
+              path: `${element}@${name17}`,
+              message: `Invalid value: must be one of ${def.values.join(", ")}`
+            });
+          }
+          if (def.pattern && typeof value === "string" && !def.pattern.test(value)) {
+            errors.push({
+              type: "attribute",
+              path: `${element}@${name17}`,
+              message: `Invalid format for ${name17}`
+            });
+          }
+          if (def.validate) {
+            const error = def.validate(value);
+            if (error) {
+              errors.push({
+                type: "attribute",
+                path: `${element}@${name17}`,
+                message: error
+              });
+            }
+          }
+        }
+        return errors;
+      }
+      /**
+       * Generate TypeScript AST types from grammar
+       */
+      generateTypes() {
+        const compiled2 = this.compile();
+        const types = [];
+        const blockTypeNames = Array.from(compiled2.blockTypes).map((t) => `'${t}'`).join(" | ");
+        types.push(`export type BlockType = ${blockTypeNames};`);
+        types.push("\nexport const ELEMENT_TO_TYPE = {");
+        for (const [element, type] of Object.entries(compiled2.elementToType)) {
+          types.push(`  '${element}': '${type}',`);
+        }
+        types.push("} as const;");
+        return types.join("\n");
+      }
+    };
+  }
+});
+
+// document/parser-grammar.ts
+var parser_grammar_exports = {};
+__export(parser_grammar_exports, {
+  parseXML: () => parseXML,
+  parseXmlToAst: () => parseXmlToAst,
+  serializeAstToXml: () => serializeAstToXml,
+  serializeToXML: () => serializeToXML
+});
+import * as xml2js from "xml-js";
+import { v4 as uuidv4 } from "uuid";
+function parseXmlToAst(xmlString) {
+  if (!xmlString || !xmlString.trim()) {
+    throw new ParseError("Empty XML content provided");
+  }
+  const options = {
+    compact: false,
+    textKey: "text",
+    ignoreDeclaration: true,
+    ignoreInstruction: true,
+    ignoreComment: true,
+    ignoreDoctype: true,
+    ignoreText: false,
+    trim: false,
+    sanitize: false,
+    nativeType: false
+  };
+  let result;
+  try {
+    result = xml2js.xml2js(xmlString, options);
+  } catch (error) {
+    throw new ParseError(
+      `Invalid XML format: ${error instanceof Error ? error.message : "Failed to parse XML"}`
+    );
+  }
+  const rootElement = result.elements?.[0];
+  if (!rootElement || rootElement.type !== "element") {
+    throw new ParseError("No root element found");
+  }
+  switch (rootElement.name) {
+    case "document":
+      return parseDocument(rootElement);
+    case "agent":
+      return parseAgent(rootElement);
+    case "diff":
+      return parseDiff(rootElement);
+    default:
+      throw new ParseError(
+        `Unknown root element: ${rootElement.name}. Expected: document, agent, or diff`
+      );
+  }
+}
+function parseDocument(documentElement) {
+  const attrs = documentElement.attributes || {};
+  const validationErrors = compiled.validateAttributes("document", attrs);
+  if (validationErrors.length > 0) {
+    throw new ParseError(
+      `Document validation failed: ${validationErrors[0].message}`
+    );
+  }
+  const documentId = attrs.id || uuidv4();
+  const blocks = [];
+  const childElements = documentElement.elements || [];
+  for (const element of childElements) {
+    if (element.type === "element" && element.name) {
+      const block = parseBlock(element);
+      if (block) {
+        blocks.push(block);
+      }
+    }
+  }
+  return {
+    id: documentId,
+    blocks: blocks.length > 0 ? blocks : [createEmptyParagraph()],
+    metadata: extractMetadata(attrs)
+  };
+}
+function parseAgent(agentElement) {
+  const attrs = agentElement.attributes || {};
+  const validationErrors = compiled.validateAttributes("agent", attrs);
+  if (validationErrors.length > 0) {
+    throw new ParseError(
+      `Agent validation failed: ${validationErrors[0].message}`
+    );
+  }
+  const agentId = attrs.id || uuidv4();
+  const blocks = [];
+  const childElements = agentElement.elements || [];
+  for (const element of childElements) {
+    if (element.type === "element" && element.name) {
+      const block = parseBlock(element);
+      if (block) {
+        blocks.push(block);
+      }
+    }
+  }
+  return {
+    type: "agent",
+    id: agentId,
+    name: attrs.name,
+    description: attrs.description,
+    model: attrs.model,
+    blocks
+  };
+}
+function parseDiff(diffElement) {
+  const attrs = diffElement.attributes || {};
+  const validationErrors = compiled.validateAttributes("diff", attrs);
+  if (validationErrors.length > 0) {
+    throw new ParseError(
+      `Diff validation failed: ${validationErrors[0].message}`
+    );
+  }
+  const operations = [];
+  const childElements = diffElement.elements || [];
+  for (const element of childElements) {
+    if (element.type === "element" && element.name) {
+      const operation = parseEditOperation(element);
+      if (operation) {
+        operations.push(operation);
+      }
+    }
+  }
+  return {
+    type: "diff",
+    targetDocument: attrs.targetDocument,
+    timestamp: attrs.timestamp ? new Date(attrs.timestamp) : /* @__PURE__ */ new Date(),
+    operations
+  };
+}
+function parseEditOperation(element) {
+  if (!element.name) return null;
+  const attrs = element.attributes || {};
+  switch (element.name) {
+    case "edit:prop":
+      return {
+        type: "edit:attr",
+        blockId: attrs["block-id"],
+        name: attrs.name,
+        value: attrs.value
+      };
+    case "edit:content":
+      return {
+        type: "edit:content",
+        blockId: attrs["block-id"],
+        content: parseRichContent(element)
+      };
+    case "insert":
+      const insertBlocks = [];
+      for (const child of element.elements || []) {
+        if (child.type === "element" && child.name) {
+          const block = parseBlock(child);
+          if (block) {
+            insertBlocks.push(block);
+          }
+        }
+      }
+      return {
+        type: "insert",
+        afterBlockId: attrs["after-block-id"],
+        beforeBlockId: attrs["before-block-id"],
+        atStart: attrs["at-start"] === "true",
+        atEnd: attrs["at-end"] === "true",
+        blocks: insertBlocks
+      };
+    case "delete":
+      return {
+        type: "delete",
+        blockId: attrs["block-id"]
+      };
+    case "replace":
+      const replaceBlocks = [];
+      for (const child of element.elements || []) {
+        if (child.type === "element" && child.name) {
+          const block = parseBlock(child);
+          if (block) {
+            replaceBlocks.push(block);
+          }
+        }
+      }
+      return {
+        type: "replace",
+        blockId: attrs["block-id"],
+        blocks: replaceBlocks
+      };
+    default:
+      console.warn(`Unknown edit operation: ${element.name}`);
+      return null;
+  }
+}
+function parseBlock(element) {
+  if (!element.name) return null;
+  const elementType = compiled.elementToType[element.name];
+  if (!elementType) {
+    return null;
+  }
+  const id = element.attributes?.id || uuidv4();
+  const attrs = element.attributes || {};
+  const errors = compiled.validateAttributes(element.name, attrs);
+  if (errors.length > 0) {
+    throw new ParseError(
+      `Invalid attributes for ${element.name}: ${errors[0].message}`
+    );
+  }
+  switch (elementType) {
+    case "function_call":
+      return parseFunctionCall(element, id, attrs);
+    case "trigger":
+      return parseTrigger(element, id, attrs);
+    case "tool":
+      return parseTool(element, id, attrs);
+    default:
+      return parseContentBlock(element, id, attrs, elementType);
+  }
+}
+function parseFunctionCall(element, id, attrs) {
+  const tool = attrs["idyll-tool"];
+  let parameters = {};
+  let instructions = [];
+  let result;
+  for (const child of element.elements || []) {
+    if (child.type === "element" && child.name) {
+      switch (child.name) {
+        case "params":
+          const paramsText = extractTextContent(child);
+          if (paramsText) {
+            try {
+              parameters = JSON.parse(paramsText);
+            } catch {
+              throw new ParseError(`Invalid JSON in params: ${paramsText}`);
+            }
+          }
+          break;
+        case "content":
+          instructions = parseRichContent(child);
+          break;
+        case "result":
+          const resultText = extractTextContent(child);
+          if (resultText) {
+            try {
+              result = JSON.parse(resultText);
+            } catch {
+              result = resultText;
+            }
+          }
+          break;
+      }
+    }
+  }
+  return {
+    id,
+    type: "function_call",
+    tool,
+    parameters,
+    instructions: instructions.length > 0 ? instructions : void 0,
+    result: result ? { success: true, data: result } : void 0,
+    metadata: {
+      modelId: attrs.modelId
+    }
+  };
+}
+function parseTrigger(element, id, attrs) {
+  const tool = attrs["idyll-trigger"];
+  const enabled = attrs.enabled !== false;
+  let parameters = {};
+  let instructions = [];
+  for (const child of element.elements || []) {
+    if (child.type === "element" && child.name) {
+      switch (child.name) {
+        case "params":
+          const paramsText = extractTextContent(child);
+          if (paramsText) {
+            try {
+              parameters = JSON.parse(paramsText);
+            } catch {
+              throw new ParseError(`Invalid JSON in params: ${paramsText}`);
+            }
+          }
+          break;
+        case "content":
+          instructions = parseRichContent(child);
+          break;
+      }
+    }
+  }
+  return {
+    id,
+    type: "trigger",
+    tool,
+    parameters,
+    instructions: instructions.length > 0 ? instructions : void 0,
+    metadata: { enabled }
+  };
+}
+function parseTool(element, id, attrs) {
+  const title = attrs.title;
+  const icon = attrs.icon;
+  let description = "";
+  let definition = [];
+  for (const child of element.elements || []) {
+    if (child.type === "element" && child.name) {
+      switch (child.name) {
+        case "tool:description":
+          description = extractTextContent(child);
+          break;
+        case "tool:definition":
+          for (const defChild of child.elements || []) {
+            if (defChild.type === "element" && defChild.name) {
+              if (compiled.elementToType[defChild.name] === "tool") {
+                throw new ParseError("Tools cannot contain other tools");
+              }
+              const block = parseBlock(defChild);
+              if (block) {
+                definition.push(block);
+              }
+            }
+          }
+          break;
+      }
+    }
+  }
+  return {
+    id,
+    type: "tool",
+    content: [{ type: "text", text: description }],
+    children: definition.length > 0 ? definition : void 0,
+    props: { title, icon }
+  };
+}
+function parseContentBlock(element, id, attrs, blockType) {
+  const content = parseRichContent(element);
+  const children = [];
+  for (const child of element.elements || []) {
+    if (child.type === "element" && child.name) {
+      const childType = compiled.elementToType[child.name];
+      if (childType && compiled.blockTypes.has(childType)) {
+        const childBlock = parseBlock(child);
+        if (childBlock) {
+          children.push(childBlock);
+        }
+      }
+    }
+  }
+  if (blockType === "heading") {
+    if (element.name === "heading") {
+    } else if (element.name) {
+      const match = element.name.match(/^h(\d)$/);
+      if (match) {
+        attrs.level = parseInt(match[1], 10);
+      }
+    }
+  }
+  return {
+    id,
+    type: blockType,
+    content,
+    children: children.length > 0 ? children : void 0,
+    props: attrs
+  };
+}
+function parseRichContent(element) {
+  const content = [];
+  if (!element.elements) return content;
+  for (const child of element.elements) {
+    if (child.type === "text" && child.text) {
+      content.push({
+        type: "text",
+        text: child.text
+      });
+    } else if (child.type === "element" && child.name) {
+      const inlineElement = parseInlineElement(child);
+      if (inlineElement) {
+        if (Array.isArray(inlineElement)) {
+          content.push(...inlineElement);
+        } else {
+          content.push(inlineElement);
+        }
+      }
+    }
+  }
+  return content;
+}
+function parseInlineElement(element) {
+  if (!element.name) return null;
+  if (element.name.startsWith("mention:")) {
+    const mentionType = element.name.substring(8);
+    const id = element.attributes?.id;
+    const label = element.attributes?.label || extractTextContent(element);
+    return {
+      type: "mention",
+      mentionType,
+      id,
+      label
+    };
+  }
+  if (element.name === "variable") {
+    const name17 = element.attributes?.name;
+    const prompt = element.attributes?.prompt;
+    const value = element.attributes?.value;
+    return {
+      type: "variable",
+      name: name17,
+      ...prompt && { prompt },
+      ...value && { value }
+    };
+  }
+  if (element.name === "a") {
+    const href = element.attributes?.href;
+    return {
+      type: "link",
+      href,
+      content: parseRichContent(element)
+    };
+  }
+  if (element.name === "annotation") {
+    return {
+      type: "annotation",
+      content: parseRichContent(element),
+      annotation: element.attributes || {}
+    };
+  }
+  if (element.name === "annotatedtext") {
+    const annotation = element.attributes?.annotation;
+    return {
+      type: "annotation",
+      content: parseRichContent(element),
+      annotation: { title: annotation }
+    };
+  }
+  if (element.name === "aieditresponse") {
+    const status = element.attributes?.status;
+    return {
+      type: "annotation",
+      content: parseRichContent(element),
+      annotation: { type: "ai-edit", status }
+    };
+  }
+  const styleMap = {
+    strong: "bold",
+    b: "bold",
+    em: "italic",
+    i: "italic",
+    u: "underline",
+    underline: "underline",
+    s: "strikethrough",
+    strike: "strikethrough",
+    del: "strikethrough",
+    code: "code",
+    tt: "code"
+  };
+  const style = styleMap[element.name];
+  if (style) {
+    const innerContent = parseRichContent(element);
+    return innerContent.map((item) => {
+      if (isTextContent(item)) {
+        return {
+          ...item,
+          styles: [...item.styles || [], style]
+        };
+      }
+      return item;
+    });
+  }
+  return null;
+}
+function serializeAstToXml(document) {
+  let root;
+  if ("type" in document) {
+    if (document.type === "agent") {
+      root = serializeAgentDocument(document);
+    } else if (document.type === "diff") {
+      root = serializeDiffDocument(document);
+    } else {
+      throw new Error(`Unknown document type`);
+    }
+  } else {
+    root = serializeIdyllDocument(document);
+  }
+  const options = {
+    compact: false,
+    spaces: 2,
+    textKey: "text"
+  };
+  const wrapped = {
+    elements: [root]
+  };
+  return `<?xml version="1.0" encoding="UTF-8"?>
+${xml2js.js2xml(
+    wrapped,
+    options
+  )}`;
+}
+function serializeIdyllDocument(document) {
+  return {
+    type: "element",
+    name: "document",
+    attributes: {
+      id: document.id,
+      ...serializeMetadata(document.metadata)
+    },
+    elements: document.blocks.map(serializeBlock)
+  };
+}
+function serializeAgentDocument(document) {
+  return {
+    type: "element",
+    name: "agent",
+    attributes: {
+      id: document.id,
+      ...document.name && { name: document.name },
+      ...document.description && { description: document.description },
+      ...document.model && { model: document.model }
+    },
+    elements: document.blocks.map(serializeBlock)
+  };
+}
+function serializeDiffDocument(document) {
+  return {
+    type: "element",
+    name: "diff",
+    attributes: {
+      ...document.targetDocument && {
+        targetDocument: document.targetDocument
+      },
+      timestamp: document.timestamp.toISOString()
+    },
+    elements: document.operations.map(serializeEditOperation)
+  };
+}
+function serializeBlock(block) {
+  if (isExecutableBlock(block)) {
+    return serializeExecutableBlock(block);
+  }
+  if (block.type === "tool") {
+    return serializeToolBlock(block);
+  }
+  return serializeContentBlock(block);
+}
+function serializeExecutableBlock(block) {
+  const elements = [];
+  if (Object.keys(block.parameters).length > 0) {
+    elements.push({
+      type: "element",
+      name: "params",
+      elements: [
+        {
+          type: "cdata",
+          cdata: JSON.stringify(block.parameters)
+        }
+      ]
+    });
+  }
+  if (block.instructions && block.instructions.length > 0) {
+    elements.push({
+      type: "element",
+      name: "content",
+      elements: serializeRichContent(block.instructions)
+    });
+  }
+  if (block.type === "function_call") {
+    if (block.result) {
+      elements.push({
+        type: "element",
+        name: "result",
+        elements: [
+          {
+            type: "cdata",
+            cdata: JSON.stringify(block.result.data || block.result)
+          }
+        ]
+      });
+    }
+    return {
+      type: "element",
+      name: "fncall",
+      attributes: {
+        id: block.id,
+        "idyll-tool": block.tool,
+        ...block.metadata?.modelId && { modelId: block.metadata.modelId }
+      },
+      elements
+    };
+  } else {
+    return {
+      type: "element",
+      name: "trigger",
+      attributes: {
+        id: block.id,
+        "idyll-trigger": block.tool,
+        enabled: String(block.metadata?.enabled !== false)
+      },
+      elements
+    };
+  }
+}
+function serializeToolBlock(block) {
+  const elements = [];
+  const description = block.content.map((c) => isTextContent(c) ? c.text : "").join("");
+  elements.push({
+    type: "element",
+    name: "tool:description",
+    elements: [{ type: "text", text: description }]
+  });
+  if (block.children && block.children.length > 0) {
+    elements.push({
+      type: "element",
+      name: "tool:definition",
+      elements: block.children.map(serializeBlock)
+    });
+  }
+  const attributes = {
+    id: block.id,
+    title: block.props?.title
+  };
+  if (block.props?.icon) {
+    attributes.icon = block.props.icon;
+  }
+  return {
+    type: "element",
+    name: "tool",
+    attributes,
+    elements
+  };
+}
+function serializeContentBlock(block) {
+  const elements = [
+    ...serializeRichContent(block.content),
+    ...(block.children || []).map(serializeBlock)
+  ];
+  const typeToElement = Object.entries(compiled.elementToType).reduce(
+    (acc, [elem, type]) => {
+      if (!acc[type]) acc[type] = [];
+      acc[type].push(elem);
+      return acc;
+    },
+    {}
+  );
+  let elementName = typeToElement[block.type]?.[0] || "p";
+  if (block.type === "heading" && block.props?.level) {
+    elementName = `h${block.props.level}`;
+  }
+  return {
+    type: "element",
+    name: elementName,
+    attributes: {
+      id: block.id,
+      ...block.props
+    },
+    elements: elements.length > 0 ? elements : void 0
+  };
+}
+function serializeRichContent(content) {
+  return content.map((item) => {
+    if (isTextContent(item)) {
+      if (item.styles && item.styles.length > 0) {
+        const styleToElement = {
+          bold: "strong",
+          italic: "em",
+          underline: "u",
+          strikethrough: "s",
+          code: "code"
+        };
+        let element = {
+          type: "element",
+          name: styleToElement[item.styles[0]],
+          elements: [{ type: "text", text: item.text }]
+        };
+        for (let i = 1; i < item.styles.length; i++) {
+          element = {
+            type: "element",
+            name: styleToElement[item.styles[i]],
+            elements: [element]
+          };
+        }
+        return element;
+      }
+      return { type: "text", text: item.text };
+    }
+    switch (item.type) {
+      case "mention":
+        return {
+          type: "element",
+          name: `mention:${item.mentionType}`,
+          attributes: {
+            id: item.id,
+            ...item.label && { label: item.label }
+          },
+          elements: item.label ? void 0 : [{ type: "text", text: item.label || "" }]
+        };
+      case "variable":
+        return {
+          type: "element",
+          name: "variable",
+          attributes: {
+            name: item.name,
+            ...item.prompt && { prompt: item.prompt },
+            ...item.value && { value: item.value }
+          }
+        };
+      case "link":
+        return {
+          type: "element",
+          name: "a",
+          attributes: { href: item.href },
+          elements: serializeRichContent(item.content)
+        };
+      case "annotation":
+        return {
+          type: "element",
+          name: "annotation",
+          attributes: {
+            ...item.annotation.title && { title: String(item.annotation.title) },
+            ...item.annotation.comment && { comment: String(item.annotation.comment) },
+            ...item.annotation.confidence !== void 0 && { confidence: String(item.annotation.confidence) }
+          },
+          elements: serializeRichContent(item.content)
+        };
+      default:
+        return { type: "text", text: "" };
+    }
+  });
+}
+function extractTextContent(element) {
+  let text = "";
+  if (element.elements) {
+    for (const child of element.elements) {
+      if (child.type === "text" && child.text) {
+        text += child.text;
+      } else if (child.type === "cdata" && child.cdata) {
+        text += child.cdata;
+      } else if (child.type === "element") {
+        text += extractTextContent(child);
+      }
+    }
+  }
+  return text;
+}
+function createEmptyParagraph() {
+  return {
+    id: uuidv4(),
+    type: "paragraph",
+    content: []
+  };
+}
+function extractMetadata(attrs) {
+  const metadata = {};
+  if (attrs.version) metadata.version = attrs.version;
+  if (attrs.created) metadata.created = new Date(attrs.created);
+  if (attrs.modified) metadata.modified = new Date(attrs.modified);
+  return Object.keys(metadata).length > 0 ? metadata : void 0;
+}
+function serializeMetadata(metadata) {
+  if (!metadata) return {};
+  const result = {};
+  if (metadata.version) result.version = String(metadata.version);
+  if (metadata.created instanceof Date)
+    result.created = metadata.created.toISOString();
+  if (metadata.modified instanceof Date)
+    result.modified = metadata.modified.toISOString();
+  return result;
+}
+function serializeEditOperation(operation) {
+  switch (operation.type) {
+    case "edit:attr":
+      return {
+        type: "element",
+        name: "edit:prop",
+        attributes: {
+          "block-id": operation.blockId,
+          name: operation.name,
+          value: operation.value
+        }
+      };
+    case "edit:content":
+      return {
+        type: "element",
+        name: "edit:content",
+        attributes: {
+          "block-id": operation.blockId
+        },
+        elements: serializeRichContent(operation.content)
+      };
+    case "insert":
+      return {
+        type: "element",
+        name: "insert",
+        attributes: {
+          ...operation.afterBlockId && {
+            "after-block-id": operation.afterBlockId
+          },
+          ...operation.beforeBlockId && {
+            "before-block-id": operation.beforeBlockId
+          },
+          ...operation.atStart && { "at-start": "true" },
+          ...operation.atEnd && { "at-end": "true" }
+        },
+        elements: operation.blocks.map(serializeBlock)
+      };
+    case "delete":
+      return {
+        type: "element",
+        name: "delete",
+        attributes: {
+          "block-id": operation.blockId
+        }
+      };
+    case "replace":
+      return {
+        type: "element",
+        name: "replace",
+        attributes: {
+          "block-id": operation.blockId
+        },
+        elements: operation.blocks.map(serializeBlock)
+      };
+    default:
+      throw new Error(`Unknown operation type`);
+  }
+}
+var compiler, compiled, parseXML, serializeToXML;
+var init_parser_grammar = __esm({
+  "document/parser-grammar.ts"() {
+    "use strict";
+    init_ast();
+    init_types();
+    init_grammar();
+    init_grammar_compiler();
+    compiler = new GrammarCompiler(GRAMMAR);
+    compiled = compiler.compile();
+    parseXML = parseXmlToAst;
+    serializeToXML = serializeAstToXml;
+  }
+});
 
 // node_modules/@ai-sdk/openai/node_modules/@ai-sdk/provider/dist/index.mjs
 function getErrorMessage(error) {
@@ -8965,1508 +10552,9 @@ var init_ai_variable_resolver = __esm({
   }
 });
 
-// document/ast.ts
-function isContentBlock(block) {
-  return !isExecutableBlock(block);
-}
-function isExecutableBlock(block) {
-  return block.type === "function_call" || block.type === "trigger";
-}
-function isTextContent(content) {
-  return content.type === "text";
-}
-function isMention(content) {
-  return content.type === "mention";
-}
-function isVariable(content) {
-  return content.type === "variable";
-}
-function* traverseBlocks(blocks) {
-  for (const block of blocks) {
-    yield block;
-    if ("children" in block && block.children) {
-      yield* traverseBlocks(block.children);
-    }
-  }
-}
-function findBlock(blocks, id) {
-  for (const block of traverseBlocks(blocks)) {
-    if (block.id === id) {
-      return block;
-    }
-  }
-  return void 0;
-}
-function getExecutableBlocks(blocks) {
-  const executable = [];
-  for (const block of traverseBlocks(blocks)) {
-    if (isExecutableBlock(block)) {
-      executable.push(block);
-    }
-  }
-  return executable;
-}
-function extractMentions(blocks) {
-  const mentions = [];
-  function extractFromContent(content) {
-    for (const item of content) {
-      if (isMention(item)) {
-        mentions.push(item);
-      } else if ("content" in item && Array.isArray(item.content)) {
-        extractFromContent(item.content);
-      }
-    }
-  }
-  for (const block of traverseBlocks(blocks)) {
-    if ("content" in block && Array.isArray(block.content)) {
-      extractFromContent(block.content);
-    }
-    if (isExecutableBlock(block) && block.instructions) {
-      extractFromContent(block.instructions);
-    }
-  }
-  return mentions;
-}
-function extractVariables(blocks) {
-  const variables = [];
-  function extractFromContent(content) {
-    for (const item of content) {
-      if (isVariable(item)) {
-        variables.push(item);
-      } else if ("content" in item && Array.isArray(item.content)) {
-        extractFromContent(item.content);
-      }
-    }
-  }
-  for (const block of traverseBlocks(blocks)) {
-    if ("content" in block && Array.isArray(block.content)) {
-      extractFromContent(block.content);
-    }
-    if (isExecutableBlock(block) && block.instructions) {
-      extractFromContent(block.instructions);
-    }
-  }
-  return variables;
-}
-
-// document/parser-grammar.ts
-import * as xml2js from "xml-js";
-import { v4 as uuidv4 } from "uuid";
-
-// types.ts
-var IdyllEngineError = class extends Error {
-  constructor(message, code, details) {
-    super(message);
-    this.code = code;
-    this.details = details;
-    this.name = "IdyllEngineError";
-  }
-};
-var ParseError = class extends IdyllEngineError {
-  constructor(message, details) {
-    super(message, "PARSE_ERROR", details);
-    this.name = "ParseError";
-  }
-};
-
-// document/grammars/grammar-dsl.ts
-function terminal(element, attrs, content) {
-  return { type: "terminal", element, attributes: attrs, content };
-}
-function seq(...rules) {
-  return {
-    type: "sequence",
-    rules: rules.map((r) => typeof r === "string" ? ref(r) : r)
-  };
-}
-function choice(...rules) {
-  return {
-    type: "choice",
-    rules: rules.map((r) => typeof r === "string" ? ref(r) : r)
-  };
-}
-function repeat(rule, min = 0, max = null) {
-  return {
-    type: "repeat",
-    rule: typeof rule === "string" ? ref(rule) : rule,
-    min,
-    max
-  };
-}
-function optional(rule) {
-  return {
-    type: "optional",
-    rule: typeof rule === "string" ? ref(rule) : rule
-  };
-}
-function ref(name17) {
-  return { type: "ref", name: name17 };
-}
-var zeroOrMore = (rule) => repeat(rule, 0, null);
-var oneOrMore = (rule) => repeat(rule, 1, null);
-
-// document/grammars/document-grammar.ts
-var DOCUMENT_GRAMMAR = {
-  // Document root
-  document: seq(
-    terminal("document", {
-      id: { type: "string", required: false },
-      version: { type: "string", required: false },
-      created: { type: "string", required: false },
-      modified: { type: "string", required: false }
-    }),
-    zeroOrMore("block")
-  ),
-  // Blocks
-  block: choice(
-    "content-block",
-    "executable-block",
-    "tool-block"
-  ),
-  "content-block": choice(
-    "paragraph",
-    "heading",
-    "bullet-list-item",
-    "numbered-list-item",
-    "checklist-item",
-    "code",
-    "quote",
-    "separator",
-    "data"
-  ),
-  "executable-block": choice(
-    "function-call",
-    "trigger"
-  ),
-  // Content blocks
-  paragraph: choice(
-    terminal("p", {}, "rich"),
-    terminal("paragraph", {}, "rich")
-    // legacy support
-  ),
-  heading: choice(
-    terminal("h1", {}, "rich"),
-    terminal("h2", {}, "rich"),
-    terminal("h3", {}, "rich"),
-    terminal("h4", {}, "rich"),
-    terminal("h5", {}, "rich"),
-    terminal("h6", {}, "rich"),
-    terminal("heading", {
-      // legacy support
-      level: { type: "number", required: true, validate: (v) => {
-        const num = Number(v);
-        return num >= 1 && num <= 6 ? null : "Level must be 1-6";
-      } }
-    }, "rich")
-  ),
-  // List items (individual blocks, no containers)
-  "bullet-list-item": terminal("bulletlistitem", {}, "rich"),
-  "numbered-list-item": terminal("numberedlistitem", {}, "rich"),
-  "checklist-item": terminal("checklistitem", {
-    checked: { type: "boolean", required: true }
-  }, "rich"),
-  code: terminal("code", {
-    language: { type: "string", required: false }
-  }, "text"),
-  quote: terminal("quote", {
-    author: { type: "string", required: false },
-    source: { type: "string", required: false }
-  }, "rich"),
-  separator: terminal("separator", {}, "none"),
-  data: terminal("data", {
-    title: { type: "string", required: false }
-  }, "text"),
-  // Executable blocks
-  "function-call": seq(
-    terminal("fncall", {
-      "idyll-tool": {
-        type: "string",
-        required: true,
-        // Format: \"module:function\" or just \"function\" (e.g., \"demo:echo\", \"ai:analyzeText\", \"echo\")
-        // Module and function names MUST be valid JS identifiers
-        // For Azure Functions compatibility, transform at adapter layer:
-        // \"module:function\" → \"module--function\" (double hyphen separator)
-        pattern: /^([a-zA-Z_$][a-zA-Z0-9_$]*:)?[a-zA-Z_$][a-zA-Z0-9_$]*$/
-      },
-      modelId: { type: "string", required: false }
-    }),
-    optional("params"),
-    optional("content"),
-    optional("result")
-  ),
-  trigger: seq(
-    terminal("trigger", {
-      "idyll-trigger": {
-        type: "string",
-        required: true,
-        // Format: \"module:trigger\" or just \"trigger\" (e.g., \"time:schedule\", \"webhook:receive\", \"daily\")
-        // Module and trigger names MUST be valid JS identifiers
-        // For Azure Functions compatibility, transform at adapter layer:
-        // \"module:trigger\" → \"module--trigger\" (double hyphen separator)
-        pattern: /^([a-zA-Z_$][a-zA-Z0-9_$]*:)?[a-zA-Z_$][a-zA-Z0-9_$]*$/
-      },
-      enabled: { type: "boolean", default: true }
-    }),
-    optional("params"),
-    optional("content")
-  ),
-  // Tool blocks
-  "tool-block": seq(
-    terminal("tool", {
-      title: { type: "string", required: true },
-      icon: { type: "string", required: false }
-    }),
-    ref("tool-description"),
-    ref("tool-definition")
-  ),
-  "tool-description": terminal("tool:description", {}, "text"),
-  "tool-definition": seq(
-    terminal("tool:definition"),
-    zeroOrMore(choice("content-block", "executable-block"))
-    // no nested tools!
-  ),
-  // Function call children
-  params: seq(
-    terminal("params"),
-    ref("json-content")
-  ),
-  content: seq(
-    terminal("content"),
-    ref("rich-content")
-  ),
-  result: seq(
-    terminal("result"),
-    ref("json-content")
-  ),
-  // Content types
-  "rich-content": zeroOrMore(choice(
-    "text",
-    "styled-text",
-    "mention",
-    "variable",
-    "link",
-    "annotation",
-    "annotated-text",
-    "ai-edit-response"
-  )),
-  "text-content": terminal("_text", {}, "text"),
-  // pseudo-element for plain text
-  "json-content": terminal("_json", {}, "json"),
-  // pseudo-element for JSON
-  // Inline elements
-  "styled-text": choice(
-    seq(choice(terminal("strong"), terminal("b")), ref("rich-content")),
-    seq(choice(terminal("em"), terminal("i")), ref("rich-content")),
-    seq(choice(terminal("u"), terminal("underline")), ref("rich-content")),
-    seq(choice(terminal("s"), terminal("strike"), terminal("del")), ref("rich-content")),
-    seq(choice(terminal("code"), terminal("tt")), ref("rich-content"))
-  ),
-  annotation: seq(
-    terminal("annotation", {
-      title: { type: "string", required: false },
-      comment: { type: "string", required: false },
-      confidence: { type: "number", required: false }
-    }),
-    ref("rich-content")
-  ),
-  mention: choice(
-    terminal("mention:user", {
-      id: { type: "string", required: true },
-      label: { type: "string", required: false }
-    }, "text"),
-    terminal("mention:document", {
-      id: { type: "string", required: true },
-      label: { type: "string", required: false }
-    }, "text"),
-    terminal("mention:agent", {
-      id: { type: "string", required: true },
-      label: { type: "string", required: false }
-    }, "text"),
-    terminal("mention:custom", {
-      id: { type: "string", required: true },
-      type: { type: "string", required: true },
-      label: { type: "string", required: false }
-    }, "text")
-  ),
-  variable: terminal("variable", {
-    name: { type: "string", required: true },
-    prompt: { type: "string", required: false },
-    value: { type: "string", required: false }
-  }, "none"),
-  link: seq(
-    terminal("a", {
-      href: { type: "string", required: true, pattern: /^https?:\/\/.+/ }
-    }),
-    ref("rich-content")
-  ),
-  "annotated-text": seq(
-    terminal("annotatedtext", {
-      annotation: { type: "string", required: true }
-    }),
-    ref("rich-content")
-  ),
-  "ai-edit-response": seq(
-    terminal("aieditresponse", {
-      status: { type: "enum", values: ["pending", "accepted", "rejected"], required: true }
-    }),
-    ref("rich-content")
-  ),
-  text: terminal("_text", {}, "text")
-  // Raw text node
-};
-
-// document/grammars/agent-grammar.ts
-var AGENT_GRAMMAR = {
-  // Agent system prompt root
-  agent: seq(
-    terminal("agent", {
-      id: { type: "string", required: false },
-      name: { type: "string", required: false },
-      description: { type: "string", required: false },
-      model: { type: "string", required: false }
-    }),
-    zeroOrMore("block")
-  )
-};
-
-// document/grammars/diff-grammar.ts
-var DIFF_GRAMMAR = {
-  // Diff operations root
-  diff: seq(
-    terminal("diff", {
-      targetDocument: { type: "string", required: false },
-      timestamp: { type: "string", required: false }
-    }),
-    oneOrMore("edit-operation")
-  ),
-  // Edit operations
-  "edit-operation": choice(
-    "edit-attr",
-    "edit-content",
-    "edit-params",
-    "edit-id",
-    "insert",
-    "delete",
-    "replace",
-    "move"
-  ),
-  "edit-attr": terminal("edit:attr", {
-    "block-id": { type: "string", required: true },
-    name: { type: "string", required: true },
-    value: { type: "string", required: true }
-  }, "none"),
-  "edit-content": seq(
-    terminal("edit:content", {
-      "block-id": { type: "string", required: true }
-    }),
-    ref("rich-content")
-  ),
-  "edit-params": seq(
-    terminal("edit:params", {
-      "block-id": { type: "string", required: true }
-    }),
-    ref("json-content")
-  ),
-  "edit-id": terminal("edit:id", {
-    "block-id": { type: "string", required: true },
-    value: { type: "string", required: true }
-  }, "none"),
-  insert: seq(
-    terminal("insert", {
-      "after-block-id": { type: "string", required: false },
-      "before-block-id": { type: "string", required: false },
-      "at-start": { type: "boolean", required: false },
-      "at-end": { type: "boolean", required: false }
-    }),
-    oneOrMore("block")
-  ),
-  delete: terminal("delete", {
-    "block-id": { type: "string", required: true }
-  }, "none"),
-  replace: seq(
-    terminal("replace", {
-      "block-id": { type: "string", required: true }
-    }),
-    oneOrMore("block")
-  ),
-  move: terminal("move", {
-    "block-id": { type: "string", required: false },
-    "block-ids": { type: "string", required: false },
-    "from-block-id": { type: "string", required: false },
-    "to-block-id": { type: "string", required: false },
-    "after-block-id": { type: "string", required: false },
-    "before-block-id": { type: "string", required: false },
-    "at-start": { type: "boolean", required: false },
-    "at-end": { type: "boolean", required: false }
-  }, "none")
-};
-
-// document/grammars/index.ts
-var GRAMMAR = {
-  // Root types
-  root: choice(
-    "document",
-    "agent",
-    "diff"
-  ),
-  // Merge all grammar rules
-  ...DOCUMENT_GRAMMAR,
-  ...AGENT_GRAMMAR,
-  ...DIFF_GRAMMAR
-};
-
-// document/grammar-compiler.ts
-var GrammarCompiler = class {
-  grammar;
-  compiled = null;
-  constructor(grammar) {
-    this.grammar = grammar;
-  }
-  /**
-   * Compile the grammar into usable structures
-   */
-  compile() {
-    if (this.compiled) return this.compiled;
-    const elementToType = {};
-    const typeToElements = {};
-    const elementSchemas = {};
-    const blockTypes = /* @__PURE__ */ new Set();
-    const inlineElements = /* @__PURE__ */ new Set();
-    const terminals = this.collectTerminals();
-    for (const [ruleName, terminal2] of terminals) {
-      const element = terminal2.element;
-      if (element.startsWith("_")) continue;
-      const astType = this.inferAstType(element, ruleName);
-      elementToType[element] = astType;
-      if (!typeToElements[astType]) {
-        typeToElements[astType] = [];
-      }
-      typeToElements[astType].push(element);
-      elementSchemas[element] = {
-        element,
-        type: astType,
-        block: this.isBlockRule(ruleName),
-        attributes: terminal2.attributes,
-        content: terminal2.content
-      };
-      if (this.isBlockRule(ruleName)) {
-        blockTypes.add(astType);
-      } else if (this.isInlineRule(ruleName)) {
-        inlineElements.add(element);
-      }
-    }
-    const isValidElement = (element) => element in elementToType;
-    const isValidChild = (parentType, childElement) => {
-      const rule = this.findRuleByType(parentType);
-      if (!rule) return false;
-      return this.isValidInContext(rule, childElement);
-    };
-    const validateAttributes = (element, attrs) => {
-      const schema = elementSchemas[element];
-      if (!schema || !schema.attributes) return [];
-      return this.validateAttrs(attrs, schema.attributes, element);
-    };
-    this.compiled = {
-      elementToType,
-      typeToElements,
-      elementSchemas,
-      isValidElement,
-      isValidChild,
-      validateAttributes,
-      blockTypes,
-      inlineElements
-    };
-    return this.compiled;
-  }
-  /**
-   * Collect all terminal rules with their contexts
-   */
-  collectTerminals() {
-    const terminals = /* @__PURE__ */ new Map();
-    const visited = /* @__PURE__ */ new Set();
-    const visit = (ruleName, rule) => {
-      const key = `${ruleName}:${JSON.stringify(rule)}`;
-      if (visited.has(key)) return;
-      visited.add(key);
-      switch (rule.type) {
-        case "terminal":
-          terminals.set(ruleName, {
-            element: rule.element,
-            attributes: rule.attributes,
-            content: rule.content
-          });
-          break;
-        case "choice":
-        case "sequence":
-          rule.rules.forEach((r, i) => {
-            if (r.type === "ref") {
-              visit(r.name, this.grammar[r.name]);
-            } else {
-              visit(`${ruleName}[${i}]`, r);
-            }
-          });
-          break;
-        case "repeat":
-        case "optional":
-          if (rule.rule.type === "ref") {
-            visit(rule.rule.name, this.grammar[rule.rule.name]);
-          } else {
-            visit(`${ruleName}:inner`, rule.rule);
-          }
-          break;
-        case "ref":
-          if (this.grammar[rule.name]) {
-            visit(rule.name, this.grammar[rule.name]);
-          }
-          break;
-      }
-    };
-    for (const [name17, rule] of Object.entries(this.grammar)) {
-      visit(name17, rule);
-    }
-    return terminals;
-  }
-  /**
-   * Infer AST type from element name and rule context
-   */
-  inferAstType(element, ruleName) {
-    const typeMap = {
-      "p": "paragraph",
-      "paragraph": "paragraph",
-      "h1": "heading",
-      "h2": "heading",
-      "h3": "heading",
-      "h4": "heading",
-      "h5": "heading",
-      "h6": "heading",
-      "heading": "heading",
-      "fncall": "function_call",
-      "bulletlistitem": "bulletListItem",
-      "numberedlistitem": "numberedListItem",
-      "checklistitem": "checklistItem",
-      "tool:description": "_tool_description",
-      "tool:definition": "_tool_definition"
-    };
-    return typeMap[element] || element.replace(/[:-]/g, "_");
-  }
-  /**
-   * Check if a rule represents a block element
-   */
-  isBlockRule(ruleName) {
-    return ruleName.includes("block") || ruleName === "paragraph" || ruleName === "heading" || ruleName === "list" || ruleName === "code" || ruleName === "quote" || ruleName === "separator" || ruleName === "tool-block";
-  }
-  /**
-   * Check if a rule represents an inline element
-   */
-  isInlineRule(ruleName) {
-    return ruleName.includes("styled-text") || ruleName === "mention" || ruleName === "variable" || ruleName === "link" || ruleName === "text";
-  }
-  /**
-   * Find a rule that produces the given AST type
-   */
-  findRuleByType(astType) {
-    const ruleMap = {
-      "tool": "tool-block",
-      "list": "list",
-      "function_call": "function-call",
-      "trigger": "trigger"
-    };
-    const ruleName = ruleMap[astType];
-    return ruleName ? this.grammar[ruleName] : null;
-  }
-  /**
-   * Check if an element is valid in a given context
-   */
-  isValidInContext(rule, element) {
-    switch (rule.type) {
-      case "terminal":
-        return rule.element === element;
-      case "choice":
-        return rule.rules.some((r) => this.isValidInContext(r, element));
-      case "sequence":
-        return rule.rules.some((r) => this.isValidInContext(r, element));
-      case "repeat":
-      case "optional":
-        return this.isValidInContext(rule.rule, element);
-      case "ref":
-        const referenced = this.grammar[rule.name];
-        return referenced ? this.isValidInContext(referenced, element) : false;
-      default:
-        return false;
-    }
-  }
-  /**
-   * Validate attributes against schema
-   */
-  validateAttrs(attrs, schema, element) {
-    const errors = [];
-    for (const [name17, def] of Object.entries(schema)) {
-      if (def.required && !(name17 in attrs)) {
-        errors.push({
-          type: "attribute",
-          path: `${element}@${name17}`,
-          message: `Required attribute missing: ${name17}`
-        });
-      }
-    }
-    for (const [name17, value] of Object.entries(attrs)) {
-      const def = schema[name17];
-      if (!def) continue;
-      if (def.type === "enum" && def.values && !def.values.includes(value)) {
-        errors.push({
-          type: "attribute",
-          path: `${element}@${name17}`,
-          message: `Invalid value: must be one of ${def.values.join(", ")}`
-        });
-      }
-      if (def.pattern && typeof value === "string" && !def.pattern.test(value)) {
-        errors.push({
-          type: "attribute",
-          path: `${element}@${name17}`,
-          message: `Invalid format for ${name17}`
-        });
-      }
-      if (def.validate) {
-        const error = def.validate(value);
-        if (error) {
-          errors.push({
-            type: "attribute",
-            path: `${element}@${name17}`,
-            message: error
-          });
-        }
-      }
-    }
-    return errors;
-  }
-  /**
-   * Generate TypeScript AST types from grammar
-   */
-  generateTypes() {
-    const compiled2 = this.compile();
-    const types = [];
-    const blockTypeNames = Array.from(compiled2.blockTypes).map((t) => `'${t}'`).join(" | ");
-    types.push(`export type BlockType = ${blockTypeNames};`);
-    types.push("\nexport const ELEMENT_TO_TYPE = {");
-    for (const [element, type] of Object.entries(compiled2.elementToType)) {
-      types.push(`  '${element}': '${type}',`);
-    }
-    types.push("} as const;");
-    return types.join("\n");
-  }
-};
-
-// document/parser-grammar.ts
-var compiler = new GrammarCompiler(GRAMMAR);
-var compiled = compiler.compile();
-function parseXML(xmlString) {
-  if (!xmlString || !xmlString.trim()) {
-    throw new ParseError("Empty XML content provided");
-  }
-  const options = {
-    compact: false,
-    textKey: "text",
-    ignoreDeclaration: true,
-    ignoreInstruction: true,
-    ignoreComment: true,
-    ignoreDoctype: true,
-    ignoreText: false,
-    trim: false,
-    sanitize: false,
-    nativeType: false
-  };
-  let result;
-  try {
-    result = xml2js.xml2js(xmlString, options);
-  } catch (error) {
-    throw new ParseError(
-      `Invalid XML format: ${error instanceof Error ? error.message : "Failed to parse XML"}`
-    );
-  }
-  const rootElement = result.elements?.[0];
-  if (!rootElement || rootElement.type !== "element") {
-    throw new ParseError("No root element found");
-  }
-  switch (rootElement.name) {
-    case "document":
-      return parseDocument(rootElement);
-    case "agent":
-      return parseAgent(rootElement);
-    case "diff":
-      return parseDiff(rootElement);
-    default:
-      throw new ParseError(
-        `Unknown root element: ${rootElement.name}. Expected: document, agent, or diff`
-      );
-  }
-}
-function parseDocument(documentElement) {
-  const attrs = documentElement.attributes || {};
-  const validationErrors = compiled.validateAttributes("document", attrs);
-  if (validationErrors.length > 0) {
-    throw new ParseError(
-      `Document validation failed: ${validationErrors[0].message}`
-    );
-  }
-  const documentId = attrs.id || uuidv4();
-  const blocks = [];
-  const childElements = documentElement.elements || [];
-  for (const element of childElements) {
-    if (element.type === "element" && element.name) {
-      const block = parseBlock(element);
-      if (block) {
-        blocks.push(block);
-      }
-    }
-  }
-  return {
-    id: documentId,
-    blocks: blocks.length > 0 ? blocks : [createEmptyParagraph()],
-    metadata: extractMetadata(attrs)
-  };
-}
-function parseAgent(agentElement) {
-  const attrs = agentElement.attributes || {};
-  const validationErrors = compiled.validateAttributes("agent", attrs);
-  if (validationErrors.length > 0) {
-    throw new ParseError(
-      `Agent validation failed: ${validationErrors[0].message}`
-    );
-  }
-  const agentId = attrs.id || uuidv4();
-  const blocks = [];
-  const childElements = agentElement.elements || [];
-  for (const element of childElements) {
-    if (element.type === "element" && element.name) {
-      const block = parseBlock(element);
-      if (block) {
-        blocks.push(block);
-      }
-    }
-  }
-  return {
-    type: "agent",
-    id: agentId,
-    name: attrs.name,
-    description: attrs.description,
-    model: attrs.model,
-    blocks
-  };
-}
-function parseDiff(diffElement) {
-  const attrs = diffElement.attributes || {};
-  const validationErrors = compiled.validateAttributes("diff", attrs);
-  if (validationErrors.length > 0) {
-    throw new ParseError(
-      `Diff validation failed: ${validationErrors[0].message}`
-    );
-  }
-  const operations = [];
-  const childElements = diffElement.elements || [];
-  for (const element of childElements) {
-    if (element.type === "element" && element.name) {
-      const operation = parseEditOperation(element);
-      if (operation) {
-        operations.push(operation);
-      }
-    }
-  }
-  return {
-    type: "diff",
-    targetDocument: attrs.targetDocument,
-    timestamp: attrs.timestamp ? new Date(attrs.timestamp) : /* @__PURE__ */ new Date(),
-    operations
-  };
-}
-function parseEditOperation(element) {
-  if (!element.name) return null;
-  const attrs = element.attributes || {};
-  switch (element.name) {
-    case "edit:prop":
-      return {
-        type: "edit:attr",
-        blockId: attrs["block-id"],
-        name: attrs.name,
-        value: attrs.value
-      };
-    case "edit:content":
-      return {
-        type: "edit:content",
-        blockId: attrs["block-id"],
-        content: parseRichContent(element)
-      };
-    case "insert":
-      const insertBlocks = [];
-      for (const child of element.elements || []) {
-        if (child.type === "element" && child.name) {
-          const block = parseBlock(child);
-          if (block) {
-            insertBlocks.push(block);
-          }
-        }
-      }
-      return {
-        type: "insert",
-        afterBlockId: attrs["after-block-id"],
-        beforeBlockId: attrs["before-block-id"],
-        atStart: attrs["at-start"] === "true",
-        atEnd: attrs["at-end"] === "true",
-        blocks: insertBlocks
-      };
-    case "delete":
-      return {
-        type: "delete",
-        blockId: attrs["block-id"]
-      };
-    case "replace":
-      const replaceBlocks = [];
-      for (const child of element.elements || []) {
-        if (child.type === "element" && child.name) {
-          const block = parseBlock(child);
-          if (block) {
-            replaceBlocks.push(block);
-          }
-        }
-      }
-      return {
-        type: "replace",
-        blockId: attrs["block-id"],
-        blocks: replaceBlocks
-      };
-    default:
-      console.warn(`Unknown edit operation: ${element.name}`);
-      return null;
-  }
-}
-function parseBlock(element) {
-  if (!element.name) return null;
-  const elementType = compiled.elementToType[element.name];
-  if (!elementType) {
-    return null;
-  }
-  const id = element.attributes?.id || uuidv4();
-  const attrs = element.attributes || {};
-  const errors = compiled.validateAttributes(element.name, attrs);
-  if (errors.length > 0) {
-    throw new ParseError(
-      `Invalid attributes for ${element.name}: ${errors[0].message}`
-    );
-  }
-  switch (elementType) {
-    case "function_call":
-      return parseFunctionCall(element, id, attrs);
-    case "trigger":
-      return parseTrigger(element, id, attrs);
-    case "tool":
-      return parseTool(element, id, attrs);
-    default:
-      return parseContentBlock(element, id, attrs, elementType);
-  }
-}
-function parseFunctionCall(element, id, attrs) {
-  const tool = attrs["idyll-tool"];
-  let parameters = {};
-  let instructions = [];
-  let result;
-  for (const child of element.elements || []) {
-    if (child.type === "element" && child.name) {
-      switch (child.name) {
-        case "params":
-          const paramsText = extractTextContent(child);
-          if (paramsText) {
-            try {
-              parameters = JSON.parse(paramsText);
-            } catch {
-              throw new ParseError(`Invalid JSON in params: ${paramsText}`);
-            }
-          }
-          break;
-        case "content":
-          instructions = parseRichContent(child);
-          break;
-        case "result":
-          const resultText = extractTextContent(child);
-          if (resultText) {
-            try {
-              result = JSON.parse(resultText);
-            } catch {
-              result = resultText;
-            }
-          }
-          break;
-      }
-    }
-  }
-  return {
-    id,
-    type: "function_call",
-    tool,
-    parameters,
-    instructions: instructions.length > 0 ? instructions : void 0,
-    result: result ? { success: true, data: result } : void 0,
-    metadata: {
-      modelId: attrs.modelId
-    }
-  };
-}
-function parseTrigger(element, id, attrs) {
-  const tool = attrs["idyll-trigger"];
-  const enabled = attrs.enabled !== false;
-  let parameters = {};
-  let instructions = [];
-  for (const child of element.elements || []) {
-    if (child.type === "element" && child.name) {
-      switch (child.name) {
-        case "params":
-          const paramsText = extractTextContent(child);
-          if (paramsText) {
-            try {
-              parameters = JSON.parse(paramsText);
-            } catch {
-              throw new ParseError(`Invalid JSON in params: ${paramsText}`);
-            }
-          }
-          break;
-        case "content":
-          instructions = parseRichContent(child);
-          break;
-      }
-    }
-  }
-  return {
-    id,
-    type: "trigger",
-    tool,
-    parameters,
-    instructions: instructions.length > 0 ? instructions : void 0,
-    metadata: { enabled }
-  };
-}
-function parseTool(element, id, attrs) {
-  const title = attrs.title;
-  const icon = attrs.icon;
-  let description = "";
-  let definition = [];
-  for (const child of element.elements || []) {
-    if (child.type === "element" && child.name) {
-      switch (child.name) {
-        case "tool:description":
-          description = extractTextContent(child);
-          break;
-        case "tool:definition":
-          for (const defChild of child.elements || []) {
-            if (defChild.type === "element" && defChild.name) {
-              if (compiled.elementToType[defChild.name] === "tool") {
-                throw new ParseError("Tools cannot contain other tools");
-              }
-              const block = parseBlock(defChild);
-              if (block) {
-                definition.push(block);
-              }
-            }
-          }
-          break;
-      }
-    }
-  }
-  return {
-    id,
-    type: "tool",
-    content: [{ type: "text", text: description }],
-    children: definition.length > 0 ? definition : void 0,
-    props: { title, icon }
-  };
-}
-function parseContentBlock(element, id, attrs, blockType) {
-  const content = parseRichContent(element);
-  const children = [];
-  for (const child of element.elements || []) {
-    if (child.type === "element" && child.name) {
-      const childType = compiled.elementToType[child.name];
-      if (childType && compiled.blockTypes.has(childType)) {
-        const childBlock = parseBlock(child);
-        if (childBlock) {
-          children.push(childBlock);
-        }
-      }
-    }
-  }
-  if (blockType === "heading") {
-    if (element.name === "heading") {
-    } else if (element.name) {
-      const match = element.name.match(/^h(\d)$/);
-      if (match) {
-        attrs.level = parseInt(match[1], 10);
-      }
-    }
-  }
-  return {
-    id,
-    type: blockType,
-    content,
-    children: children.length > 0 ? children : void 0,
-    props: attrs
-  };
-}
-function parseRichContent(element) {
-  const content = [];
-  if (!element.elements) return content;
-  for (const child of element.elements) {
-    if (child.type === "text" && child.text) {
-      content.push({
-        type: "text",
-        text: child.text
-      });
-    } else if (child.type === "element" && child.name) {
-      const inlineElement = parseInlineElement(child);
-      if (inlineElement) {
-        if (Array.isArray(inlineElement)) {
-          content.push(...inlineElement);
-        } else {
-          content.push(inlineElement);
-        }
-      }
-    }
-  }
-  return content;
-}
-function parseInlineElement(element) {
-  if (!element.name) return null;
-  if (element.name.startsWith("mention:")) {
-    const mentionType = element.name.substring(8);
-    const id = element.attributes?.id;
-    const label = element.attributes?.label || extractTextContent(element);
-    return {
-      type: "mention",
-      mentionType,
-      id,
-      label
-    };
-  }
-  if (element.name === "variable") {
-    const name17 = element.attributes?.name;
-    const prompt = element.attributes?.prompt;
-    const value = element.attributes?.value;
-    return {
-      type: "variable",
-      name: name17,
-      ...prompt && { prompt },
-      ...value && { value }
-    };
-  }
-  if (element.name === "a") {
-    const href = element.attributes?.href;
-    return {
-      type: "link",
-      href,
-      content: parseRichContent(element)
-    };
-  }
-  if (element.name === "annotation") {
-    return {
-      type: "annotation",
-      content: parseRichContent(element),
-      annotation: element.attributes || {}
-    };
-  }
-  if (element.name === "annotatedtext") {
-    const annotation = element.attributes?.annotation;
-    return {
-      type: "annotation",
-      content: parseRichContent(element),
-      annotation: { title: annotation }
-    };
-  }
-  if (element.name === "aieditresponse") {
-    const status = element.attributes?.status;
-    return {
-      type: "annotation",
-      content: parseRichContent(element),
-      annotation: { type: "ai-edit", status }
-    };
-  }
-  const styleMap = {
-    strong: "bold",
-    b: "bold",
-    em: "italic",
-    i: "italic",
-    u: "underline",
-    underline: "underline",
-    s: "strikethrough",
-    strike: "strikethrough",
-    del: "strikethrough",
-    code: "code",
-    tt: "code"
-  };
-  const style = styleMap[element.name];
-  if (style) {
-    const innerContent = parseRichContent(element);
-    return innerContent.map((item) => {
-      if (isTextContent(item)) {
-        return {
-          ...item,
-          styles: [...item.styles || [], style]
-        };
-      }
-      return item;
-    });
-  }
-  return null;
-}
-function serializeToXML(document) {
-  let root;
-  if ("type" in document) {
-    if (document.type === "agent") {
-      root = serializeAgentDocument(document);
-    } else if (document.type === "diff") {
-      root = serializeDiffDocument(document);
-    } else {
-      throw new Error(`Unknown document type`);
-    }
-  } else {
-    root = serializeIdyllDocument(document);
-  }
-  const options = {
-    compact: false,
-    spaces: 2,
-    textKey: "text"
-  };
-  const wrapped = {
-    elements: [root]
-  };
-  return `<?xml version="1.0" encoding="UTF-8"?>
-${xml2js.js2xml(
-    wrapped,
-    options
-  )}`;
-}
-function serializeIdyllDocument(document) {
-  return {
-    type: "element",
-    name: "document",
-    attributes: {
-      id: document.id,
-      ...serializeMetadata(document.metadata)
-    },
-    elements: document.blocks.map(serializeBlock)
-  };
-}
-function serializeAgentDocument(document) {
-  return {
-    type: "element",
-    name: "agent",
-    attributes: {
-      id: document.id,
-      ...document.name && { name: document.name },
-      ...document.description && { description: document.description },
-      ...document.model && { model: document.model }
-    },
-    elements: document.blocks.map(serializeBlock)
-  };
-}
-function serializeDiffDocument(document) {
-  return {
-    type: "element",
-    name: "diff",
-    attributes: {
-      ...document.targetDocument && {
-        targetDocument: document.targetDocument
-      },
-      timestamp: document.timestamp.toISOString()
-    },
-    elements: document.operations.map(serializeEditOperation)
-  };
-}
-function serializeBlock(block) {
-  if (isExecutableBlock(block)) {
-    return serializeExecutableBlock(block);
-  }
-  if (block.type === "tool") {
-    return serializeToolBlock(block);
-  }
-  return serializeContentBlock(block);
-}
-function serializeExecutableBlock(block) {
-  const elements = [];
-  if (Object.keys(block.parameters).length > 0) {
-    elements.push({
-      type: "element",
-      name: "params",
-      elements: [
-        {
-          type: "cdata",
-          cdata: JSON.stringify(block.parameters)
-        }
-      ]
-    });
-  }
-  if (block.instructions && block.instructions.length > 0) {
-    elements.push({
-      type: "element",
-      name: "content",
-      elements: serializeRichContent(block.instructions)
-    });
-  }
-  if (block.type === "function_call") {
-    if (block.result) {
-      elements.push({
-        type: "element",
-        name: "result",
-        elements: [
-          {
-            type: "cdata",
-            cdata: JSON.stringify(block.result.data || block.result)
-          }
-        ]
-      });
-    }
-    return {
-      type: "element",
-      name: "fncall",
-      attributes: {
-        id: block.id,
-        "idyll-tool": block.tool,
-        ...block.metadata?.modelId && { modelId: block.metadata.modelId }
-      },
-      elements
-    };
-  } else {
-    return {
-      type: "element",
-      name: "trigger",
-      attributes: {
-        id: block.id,
-        "idyll-trigger": block.tool,
-        enabled: String(block.metadata?.enabled !== false)
-      },
-      elements
-    };
-  }
-}
-function serializeToolBlock(block) {
-  const elements = [];
-  const description = block.content.map((c) => isTextContent(c) ? c.text : "").join("");
-  elements.push({
-    type: "element",
-    name: "tool:description",
-    elements: [{ type: "text", text: description }]
-  });
-  if (block.children && block.children.length > 0) {
-    elements.push({
-      type: "element",
-      name: "tool:definition",
-      elements: block.children.map(serializeBlock)
-    });
-  }
-  const attributes = {
-    id: block.id,
-    title: block.props?.title
-  };
-  if (block.props?.icon) {
-    attributes.icon = block.props.icon;
-  }
-  return {
-    type: "element",
-    name: "tool",
-    attributes,
-    elements
-  };
-}
-function serializeContentBlock(block) {
-  const elements = [
-    ...serializeRichContent(block.content),
-    ...(block.children || []).map(serializeBlock)
-  ];
-  const typeToElement = Object.entries(compiled.elementToType).reduce(
-    (acc, [elem, type]) => {
-      if (!acc[type]) acc[type] = [];
-      acc[type].push(elem);
-      return acc;
-    },
-    {}
-  );
-  let elementName = typeToElement[block.type]?.[0] || "p";
-  if (block.type === "heading" && block.props?.level) {
-    elementName = `h${block.props.level}`;
-  }
-  return {
-    type: "element",
-    name: elementName,
-    attributes: {
-      id: block.id,
-      ...block.props
-    },
-    elements: elements.length > 0 ? elements : void 0
-  };
-}
-function serializeRichContent(content) {
-  return content.map((item) => {
-    if (isTextContent(item)) {
-      if (item.styles && item.styles.length > 0) {
-        const styleToElement = {
-          bold: "strong",
-          italic: "em",
-          underline: "u",
-          strikethrough: "s",
-          code: "code"
-        };
-        let element = {
-          type: "element",
-          name: styleToElement[item.styles[0]],
-          elements: [{ type: "text", text: item.text }]
-        };
-        for (let i = 1; i < item.styles.length; i++) {
-          element = {
-            type: "element",
-            name: styleToElement[item.styles[i]],
-            elements: [element]
-          };
-        }
-        return element;
-      }
-      return { type: "text", text: item.text };
-    }
-    switch (item.type) {
-      case "mention":
-        return {
-          type: "element",
-          name: `mention:${item.mentionType}`,
-          attributes: {
-            id: item.id,
-            ...item.label && { label: item.label }
-          },
-          elements: item.label ? void 0 : [{ type: "text", text: item.label || "" }]
-        };
-      case "variable":
-        return {
-          type: "element",
-          name: "variable",
-          attributes: {
-            name: item.name,
-            ...item.prompt && { prompt: item.prompt },
-            ...item.value && { value: item.value }
-          }
-        };
-      case "link":
-        return {
-          type: "element",
-          name: "a",
-          attributes: { href: item.href },
-          elements: serializeRichContent(item.content)
-        };
-      case "annotation":
-        return {
-          type: "element",
-          name: "annotation",
-          attributes: {
-            ...item.annotation.title && { title: String(item.annotation.title) },
-            ...item.annotation.comment && { comment: String(item.annotation.comment) },
-            ...item.annotation.confidence !== void 0 && { confidence: String(item.annotation.confidence) }
-          },
-          elements: serializeRichContent(item.content)
-        };
-      default:
-        return { type: "text", text: "" };
-    }
-  });
-}
-function extractTextContent(element) {
-  let text = "";
-  if (element.elements) {
-    for (const child of element.elements) {
-      if (child.type === "text" && child.text) {
-        text += child.text;
-      } else if (child.type === "cdata" && child.cdata) {
-        text += child.cdata;
-      } else if (child.type === "element") {
-        text += extractTextContent(child);
-      }
-    }
-  }
-  return text;
-}
-function createEmptyParagraph() {
-  return {
-    id: uuidv4(),
-    type: "paragraph",
-    content: []
-  };
-}
-function extractMetadata(attrs) {
-  const metadata = {};
-  if (attrs.version) metadata.version = attrs.version;
-  if (attrs.created) metadata.created = new Date(attrs.created);
-  if (attrs.modified) metadata.modified = new Date(attrs.modified);
-  return Object.keys(metadata).length > 0 ? metadata : void 0;
-}
-function serializeMetadata(metadata) {
-  if (!metadata) return {};
-  const result = {};
-  if (metadata.version) result.version = String(metadata.version);
-  if (metadata.created instanceof Date)
-    result.created = metadata.created.toISOString();
-  if (metadata.modified instanceof Date)
-    result.modified = metadata.modified.toISOString();
-  return result;
-}
-function serializeEditOperation(operation) {
-  switch (operation.type) {
-    case "edit:attr":
-      return {
-        type: "element",
-        name: "edit:prop",
-        attributes: {
-          "block-id": operation.blockId,
-          name: operation.name,
-          value: operation.value
-        }
-      };
-    case "edit:content":
-      return {
-        type: "element",
-        name: "edit:content",
-        attributes: {
-          "block-id": operation.blockId
-        },
-        elements: serializeRichContent(operation.content)
-      };
-    case "insert":
-      return {
-        type: "element",
-        name: "insert",
-        attributes: {
-          ...operation.afterBlockId && {
-            "after-block-id": operation.afterBlockId
-          },
-          ...operation.beforeBlockId && {
-            "before-block-id": operation.beforeBlockId
-          },
-          ...operation.atStart && { "at-start": "true" },
-          ...operation.atEnd && { "at-end": "true" }
-        },
-        elements: operation.blocks.map(serializeBlock)
-      };
-    case "delete":
-      return {
-        type: "element",
-        name: "delete",
-        attributes: {
-          "block-id": operation.blockId
-        }
-      };
-    case "replace":
-      return {
-        type: "element",
-        name: "replace",
-        attributes: {
-          "block-id": operation.blockId
-        },
-        elements: operation.blocks.map(serializeBlock)
-      };
-    default:
-      throw new Error(`Unknown operation type`);
-  }
-}
+// index.ts
+init_ast();
+init_parser_grammar();
 
 // document/executor.ts
 import { z } from "zod";
@@ -10727,6 +10815,8 @@ function buildToolName(module, functionName) {
 }
 
 // document/validator.ts
+init_ast();
+init_types();
 async function validateDocument(document, context) {
   const errors = [];
   const warnings = [];
@@ -10857,7 +10947,12 @@ function formatValidationIssues(issues) {
   }).join("\n");
 }
 
+// index.ts
+init_grammar();
+init_grammar_compiler();
+
 // document/variable-resolution.ts
+init_ast();
 function extractVariableDefinitions(blocks) {
   const definitions = /* @__PURE__ */ new Map();
   const seenNames = /* @__PURE__ */ new Set();
@@ -11035,6 +11130,7 @@ function interpolateContent(content, resolvedVariables) {
 }
 
 // document/custom-tool-executor.ts
+init_ast();
 async function executeCustomTool(toolBlock, options) {
   const startTime = Date.now();
   if (toolBlock.type !== "tool") {
@@ -11349,7 +11445,7 @@ function applyMove(blocks, op) {
     blocksToMove = [blockToMove];
     remainingBlocks = blocks.filter((b) => b.id !== op.blockId);
   } else if (op.blockIds) {
-    const ids = op.blockIds.split(",").map((id) => id.trim());
+    const ids = op.blockIds;
     for (const id of ids) {
       const block = findBlockById(blocks, id);
       if (!block) {
@@ -11401,6 +11497,7 @@ function findBlockById(blocks, id) {
 }
 
 // document/blocknote-converter.ts
+init_ast();
 function blockNoteToIdyllic(blockNoteBlocks) {
   return blockNoteBlocks.map(convertBlockNoteBlock);
 }
@@ -11738,7 +11835,7 @@ function testIsomorphism(original) {
 }
 
 // agent/agent.ts
-import { generateText as generateText3, streamText } from "ai";
+import { generateText as generateText2, streamText } from "ai";
 
 // agent/memory.ts
 import { formatDistanceToNow } from "date-fns";
@@ -11816,6 +11913,7 @@ ${formatted}
 import { v4 as uuidv43 } from "uuid";
 
 // agent/system-prompt.ts
+init_ast();
 function buildSystemPrompt(agent, availableTools) {
   const sections = [];
   sections.push(`You are ${agent.name || "an AI assistant"}.`);
@@ -12014,8 +12112,6 @@ function extractToolDefinitionBlocks(toolBlock) {
 }
 
 // agent/response-compressor.ts
-init_model_provider();
-import { generateText as generateText2 } from "ai";
 async function compressToolResponse(context) {
   if (!isComplexResponse(context.rawResponse)) {
     console.log(`\u{1F4E6} Response compressor: ${context.toolName} - No compression needed (simple response)`);
@@ -12024,44 +12120,46 @@ async function compressToolResponse(context) {
   console.log(`\u{1F5DC}\uFE0F  Response compressor: ${context.toolName} - Compressing verbose response...`);
   const conversationContext = context.recentMessages.slice(-3).map((m) => `${m.role}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`).join("\n");
   const responseStr = formatResponse(context.rawResponse);
-  const result = await generateText2({
-    model: getModel("gpt-4.1-mini"),
-    temperature: 0,
-    // Deterministic extraction
-    system: "You are a response compressor. Extract only the most relevant information from tool responses. Return ONLY a clean JSON object with the essential findings.",
-    prompt: `Tool: ${context.toolName}
-Parameters: ${JSON.stringify(context.toolParams, null, 2)}
-${context.toolContent ? `Content: ${context.toolContent}` : ""}
-
-Recent conversation:
-${conversationContext}
-
-Verbose tool response:
-${responseStr}
-
-Extract the key findings, results, and conclusions. Return as a clean JSON object.`
-  });
   const originalSize = JSON.stringify(context.rawResponse).length;
-  const compressedSize = result.text.length;
-  const ratio = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
-  console.log(`\u2705 Response compressed: ${originalSize} \u2192 ${compressedSize} chars (${ratio}% reduction)`);
-  try {
-    const parsed = JSON.parse(result.text);
-    console.log(`\u{1F4CB} Compressed result:`, parsed);
-    return parsed;
-  } catch {
-    console.log(`\u{1F4CB} Compressed result (text):`, result.text);
-    return result.text;
+  if (typeof context.rawResponse === "string") {
+    const isConversational = context.rawResponse.includes("?") || context.rawResponse.includes("I") || context.rawResponse.includes("you") || context.rawResponse.length > 50;
+    if (isConversational) {
+      const response = context.rawResponse.length > 1e3 ? context.rawResponse.substring(0, 1e3) + "... [truncated]" : context.rawResponse;
+      console.log(`\u2705 Conversational response detected: ${originalSize} chars`);
+      return response;
+    }
+    const compressed = context.rawResponse.length > 1e3 ? context.rawResponse.substring(0, 1e3) + "... [truncated]" : context.rawResponse;
+    console.log(`\u2705 Response compressed: ${originalSize} \u2192 ${compressed.length} chars`);
+    return compressed;
   }
+  if (context.rawResponse && typeof context.rawResponse === "object") {
+    if ("variables" in context.rawResponse && "blocks" in context.rawResponse) {
+      const ctx = context.rawResponse;
+      const summary = {
+        success: ctx.metadata?.blocksSucceeded > 0,
+        blocksExecuted: ctx.metadata?.blocksExecuted || 0,
+        variables: Object.fromEntries(ctx.variables || /* @__PURE__ */ new Map()),
+        errors: ctx.metadata?.blocksFailed > 0 ? "Some blocks failed" : null
+      };
+      console.log(`\u2705 Response compressed: ${originalSize} \u2192 ${JSON.stringify(summary).length} chars`);
+      return summary;
+    }
+    console.log(`\u2705 Response kept as-is: ${originalSize} chars (not complex enough)`);
+    return context.rawResponse;
+  }
+  return context.rawResponse;
 }
 function isComplexResponse(response) {
+  if (typeof response === "string") {
+    return response.length > 2e3;
+  }
   if (response && typeof response === "object") {
     if ("variables" in response && "blocks" in response && "metadata" in response) {
       return true;
     }
   }
   const size = JSON.stringify(response).length;
-  return size > 1e3;
+  return size > 2e3;
 }
 function formatResponse(response) {
   if (response && typeof response === "object" && "blocks" in response) {
@@ -12104,6 +12202,24 @@ var Agent = class {
   aiTools = {};
   currentMessages = [];
   constructor(config) {
+    if (config.systemPrompt && !config.document) {
+      const { parseXML: parseXML2 } = (init_parser_grammar(), __toCommonJS(parser_grammar_exports));
+      try {
+        const parsedDoc = parseXML2(config.systemPrompt);
+        config.document = {
+          type: "agent",
+          id: config.agentId || "agent-" + Date.now(),
+          name: config.agentName || "Assistant",
+          model: config.model || "gpt-4",
+          blocks: parsedDoc.blocks || []
+        };
+      } catch (error) {
+        throw new Error(`Failed to parse system prompt XML: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
+    }
+    if (!config.document) {
+      throw new Error("Either document or systemPrompt must be provided");
+    }
     this.config = config;
     this.memory = new ActivityMemory(config.memoryLimit);
     this.context = {
@@ -12118,14 +12234,14 @@ var Agent = class {
    * Initialize tools for AI SDK
    */
   initializeTools() {
-    const customTools = extractCustomTools(
+    const customTools = this.config.document ? extractCustomTools(
       this.config.document,
       this.config.tools,
       () => {
         const lastUserMessage = this.currentMessages.filter((m) => m.role === "user").pop();
         return typeof lastUserMessage?.content === "string" ? lastUserMessage.content : JSON.stringify(lastUserMessage?.content || "");
       }
-    );
+    ) : {};
     const allTools = mergeToolRegistries(this.config.tools, customTools);
     for (const [name17, tool] of Object.entries(allTools)) {
       const aiToolName = toAzureFunctionName(name17);
@@ -12135,16 +12251,9 @@ var Agent = class {
         execute: async (params) => {
           console.log(`\u{1F527} Executing tool: ${name17}`);
           const context = {
-            blockId: uuidv43(),
-            documentId: this.config.document.id,
-            canEdit: false,
-            user: { id: this.context.userId || "cli-user" },
-            mode: "agent",
-            agent: {
-              id: this.context.agentId,
-              name: this.context.agentName || "CLI Agent"
-            },
-            previousResults: /* @__PURE__ */ new Map()
+            currentBlockId: uuidv43(),
+            previousResults: /* @__PURE__ */ new Map(),
+            document: this.config.document || { id: "unknown", blocks: [] }
           };
           try {
             const content = params.content || "";
@@ -12197,7 +12306,7 @@ var Agent = class {
     const memoryContext = this.memory.formatForPrompt();
     const toolNames = Object.keys(this.aiTools);
     return buildDetailedSystemPrompt(
-      this.config.document,
+      this.config.document || { type: "agent", id: "unknown", blocks: [] },
       toolNames,
       memoryContext
     );
@@ -12213,8 +12322,8 @@ var Agent = class {
         type: "chat",
         userMessage: typeof userMessage === "string" ? userMessage : JSON.stringify(userMessage)
       });
-      const result = await generateText3({
-        model: getModel(this.config.document.model),
+      const result = await generateText2({
+        model: getModel(this.config.document?.model || this.config.model || "gpt-4"),
         system: this.getSystemPrompt(),
         messages,
         tools: this.aiTools,
@@ -12261,7 +12370,7 @@ var Agent = class {
         userMessage: typeof userMessage === "string" ? userMessage : JSON.stringify(userMessage)
       });
       const result = await streamText({
-        model: getModel(this.config.document.model),
+        model: getModel(this.config.document?.model || this.config.model || "gpt-4"),
         system: this.getSystemPrompt(),
         messages,
         tools: this.aiTools,
@@ -12281,9 +12390,19 @@ var Agent = class {
           if (toolCalls && toolCalls.length > 0) {
             activity.toolCalls = toolCalls.map((tc) => ({
               name: fromAzureFunctionName(tc.toolName),
-              args: tc.args,
-              result: tc.result
+              args: tc.args
             }));
+          }
+          if (options?.onFinish) {
+            await options.onFinish({
+              text,
+              toolCalls: toolCalls?.map((tc) => ({
+                ...tc,
+                toolName: fromAzureFunctionName(tc.toolName)
+              })),
+              usage,
+              finishReason
+            });
           }
         }
       });
@@ -12360,7 +12479,9 @@ export {
   parseCustomTool,
   parseToolName,
   parseXML,
+  parseXmlToAst,
   resolveVariables,
+  serializeAstToXml,
   serializeToXML,
   testIsomorphism,
   toAzureFunctionName,

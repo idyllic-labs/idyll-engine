@@ -163,6 +163,7 @@ export interface ExecutableBlock {
   instructions?: RichContent[]; // Natural language instructions
   result?: ExecutionResult;
   metadata?: ExecutableMetadata;
+  props?: Record<string, unknown>; // Additional properties for compatibility
 }
 
 export type ExecutableBlockType = 'function_call' | 'trigger';
