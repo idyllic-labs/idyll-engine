@@ -13,7 +13,7 @@ import type {
 } from './ast';
 import { isExecutableNode, getExecutableNodes } from './ast';
 import type { 
-  ToolExecutionContext, 
+  ToolExecutionReport, 
   ExecutionOptions,
   NodeExecutionResult,
   BlockExecutionResult 
@@ -45,7 +45,7 @@ export interface CustomToolExecutionOptions<TApi = any> extends ExecutionOptions
 export async function executeCustomTool<TApi = any>(
   toolNode: ContentNode,
   options: CustomToolExecutionOptions<TApi>
-): Promise<ToolExecutionContext> {
+): Promise<ToolExecutionReport> {
   const startTime = Date.now();
   
   // Validate it's a tool node
@@ -108,7 +108,7 @@ export async function executeCustomTool<TApi = any>(
   });
   
   // Build execution context
-  const executionContext: ToolExecutionContext = {
+  const executionContext: ToolExecutionReport = {
     variables: resolutionResult.variables,
     nodes: report.nodes,
     metadata: {
@@ -168,7 +168,7 @@ function interpolateExecutableNodes(
  * This would be used by the subprocess to return only what's needed
  */
 export function extractRelevantResult(
-  context: ToolExecutionContext,
+  context: ToolExecutionReport,
   extractionHint?: string
 ): unknown {
   // Get the last successful result by default

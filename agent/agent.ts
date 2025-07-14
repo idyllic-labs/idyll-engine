@@ -14,15 +14,18 @@ import {
   AgentExecuteResult,
   AgentActivity,
 } from "./types";
-import type { AgentDocument } from '../document/ast';
+import type { AgentDocument } from "../document/ast";
 import { ActivityMemory } from "./memory";
 import { ToolRegistry } from "../document/tool-registry";
-import { NodeExecutionContext, BlockExecutionContext } from "../document/execution-types";
+import {
+  NodeExecutionContext,
+  BlockExecutionContext,
+} from "../document/execution-types";
 import { v4 as uuidv4 } from "uuid";
 import { buildDetailedSystemPrompt } from "./system-prompt";
 import { extractCustomTools } from "./custom-tools";
 import { mergeToolRegistries } from "../document/tool-registry";
-import { compressToolResponse } from "./response-compressor";
+import { ResponsePipeline, ResponseMiddleware } from "./response-pipeline";
 import {
   toAzureFunctionName,
   fromAzureFunctionName,
@@ -39,6 +42,7 @@ export class Agent {
   private context: AgentContext;
   private aiTools: Record<string, CoreTool> = {};
   private currentMessages: Message[] = [];
+  private responsePipeline: ResponsePipeline;
 
   constructor(config: AgentConfig) {
     this.program = config.program;
@@ -51,6 +55,12 @@ export class Agent {
       activities: [],
     };
 
+    // Initialize response pipeline
+    this.responsePipeline = new ResponsePipeline();
+    if (config.responseMiddleware) {
+      config.responseMiddleware.forEach((mw) => this.responsePipeline.use(mw));
+    }
+
     // Initialize AI tools from registry
     this.initializeTools();
   }
@@ -60,19 +70,15 @@ export class Agent {
    */
   private initializeTools() {
     // Extract custom tools from agent program
-    const customTools = extractCustomTools(
-      this.program,
-      this.tools,
-      () => {
-        // Get the last user message as agent context
-        const lastUserMessage = this.currentMessages
-          .filter((m) => m.role === "user")
-          .pop();
-        return typeof lastUserMessage?.content === "string"
-          ? lastUserMessage.content
-          : JSON.stringify(lastUserMessage?.content || "");
-      }
-    );
+    const customTools = extractCustomTools(this.program, this.tools, () => {
+      // Get the last user message as agent context
+      const lastUserMessage = this.currentMessages
+        .filter((m) => m.role === "user")
+        .pop();
+      return typeof lastUserMessage?.content === "string"
+        ? lastUserMessage.content
+        : JSON.stringify(lastUserMessage?.content || "");
+    });
 
     // Merge base tools with custom tools
     const allTools = mergeToolRegistries(this.tools, customTools);
@@ -103,18 +109,15 @@ export class Agent {
 
             const result = await tool.execute(params, content, context);
 
-            // Compress response for custom tools
-            const isCustomTool = name.startsWith("custom:");
-            const finalResult = isCustomTool
-              ? await compressToolResponse({
-                  toolName: name,
-                  toolParams: params,
-                  toolContent: content,
-                  rawResponse: result,
-                  recentMessages: this.currentMessages.slice(-3),
-                })
-              : result;
+            // Process response through middleware pipeline
+            const finalResult = await this.responsePipeline.process({
+              toolName: name,
+              params: params,
+              result: result,
+              messages: this.currentMessages.slice(-3),
+            });
 
+            const isCustomTool = name.startsWith("custom:");
             if (isCustomTool) {
               console.log(`🎯 Custom tool ${name} executed and compressed`);
             }
@@ -162,11 +165,20 @@ export class Agent {
     const memoryContext = this.memory.formatForPrompt();
     const toolNames = Object.keys(this.aiTools);
 
-    return buildDetailedSystemPrompt(
+    const systemPrompt = buildDetailedSystemPrompt(
       this.program,
       toolNames,
       memoryContext
     );
+
+    console.log(
+      `[Agent] 📝 System prompt generated (${systemPrompt.length} chars)`
+    );
+    console.log(
+      `[Agent] 📝 System prompt contains response_guidelines: ${systemPrompt.includes("response_guidelines")}`
+    );
+
+    return systemPrompt;
   }
 
   /**
@@ -240,13 +252,7 @@ export class Agent {
    * Execute a chat message (streaming)
    * Returns streamText result that can be used with toDataStreamResponse()
    */
-  async chatStream(
-    messages: Message[],
-    options?: AgentExecuteOptions & {
-      onChunk?: (chunk: string) => void;
-      onToolCall?: (toolName: string, args: any) => void;
-    }
-  ) {
+  async chatStream(messages: Message[], options?: AgentExecuteOptions) {
     const userMessage = messages[messages.length - 1]?.content;
 
     try {
@@ -264,19 +270,14 @@ export class Agent {
         system: this.getSystemPrompt(),
         messages,
         tools: this.aiTools,
+        toolChoice: "auto",
         maxSteps: options?.maxSteps ?? 10,
         temperature: options?.temperature ?? 0.7,
-        onChunk: async ({ chunk }) => {
-          if (chunk.type === "text-delta" && options?.onChunk) {
-            options.onChunk(chunk.textDelta);
-          }
-          if (chunk.type === "tool-call" && options?.onToolCall) {
-            // Transform tool name back from AI format to original format
-            const originalToolName = fromAzureFunctionName(chunk.toolName);
-            options.onToolCall(originalToolName, chunk.args);
-          }
-        },
         onFinish: async ({ text, toolCalls, usage, finishReason }) => {
+          console.log(
+            `[Agent] 🎯 Final finish - reason: ${finishReason}, text length: ${text.length}, toolCalls: ${toolCalls?.length || 0}`
+          );
+
           // Update activity when stream finishes
           activity.assistantMessage = text;
           if (toolCalls && toolCalls.length > 0) {
@@ -285,7 +286,7 @@ export class Agent {
               args: tc.args,
             }));
           }
-          
+
           // Call the external onFinish callback if provided
           if (options?.onFinish) {
             await options.onFinish({

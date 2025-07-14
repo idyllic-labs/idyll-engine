@@ -5,6 +5,7 @@
 import { Message, CoreTool, LanguageModelUsage, LanguageModel } from 'ai';
 import { AgentDocument } from '../document/ast';
 import type { ToolRegistry } from '../document/tool-registry';
+import type { ResponseMiddleware } from './response-pipeline';
 
 /**
  * Agent definition - the parsed AST of an <agent> document
@@ -18,6 +19,7 @@ export interface AgentConfig {
   program: AgentDefinition;  // The agent program
   model: LanguageModel;      // AI runtime
   tools: ToolRegistry;       // Tool runtime
+  responseMiddleware?: ResponseMiddleware[]; // Optional response processing middleware
 }
 
 /**

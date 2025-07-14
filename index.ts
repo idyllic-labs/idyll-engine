@@ -58,6 +58,7 @@ export type { DiffResult } from './document/diff-applier';
 export { Agent } from './agent/agent';
 export { ActivityMemory } from './agent/memory';
 export { buildSystemPrompt, buildDetailedSystemPrompt } from './agent/system-prompt';
+export { ResponsePipeline, type MiddlewareContext, type ResponseMiddleware } from './agent/response-pipeline';
 export type { 
   AgentConfig,
   AgentDefinition,

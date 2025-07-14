@@ -88,9 +88,9 @@ export type BlockExecutionContext = NodeExecutionContext;
 // ============================================
 
 /**
- * Context returned from custom tool execution
+ * Report returned from custom tool execution
  */
-export interface ToolExecutionContext {
+export interface ToolExecutionReport {
   /** All resolved variables */
   variables: Map<string, string>;
   

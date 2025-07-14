@@ -118,7 +118,16 @@ Documents are structured using XML with blocks like:
 - <fncall idyll-tool="..."> for tool execution
 - <variable name="..." /> for variables
 - <mention:type id="...">label</mention:type> for references
-</document_format>`;
+</document_format>
+
+<response_guidelines>
+When responding to user queries:
+1. If you need to call tools, call them first
+2. After tool calls complete, provide ONE clear, comprehensive response
+3. Do not repeat or rephrase the same information multiple times
+4. Only continue with additional steps if you need to call different tools or perform distinct reasoning
+5. Avoid generating multiple similar responses about the same topic
+</response_guidelines>`;
   
   return prompt;
 }

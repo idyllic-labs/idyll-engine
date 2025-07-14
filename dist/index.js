@@ -2642,7 +2642,16 @@ Documents are structured using XML with blocks like:
 - <fncall idyll-tool="..."> for tool execution
 - <variable name="..." /> for variables
 - <mention:type id="...">label</mention:type> for references
-</document_format>`;
+</document_format>
+
+<response_guidelines>
+When responding to user queries:
+1. If you need to call tools, call them first
+2. After tool calls complete, provide ONE clear, comprehensive response
+3. Do not repeat or rephrase the same information multiple times
+4. Only continue with additional steps if you need to call different tools or perform distinct reasoning
+5. Avoid generating multiple similar responses about the same topic
+</response_guidelines>`;
   return prompt;
 }
 
@@ -2710,7 +2719,7 @@ function extractCustomTools(agentDoc, baseTools, getAgentContext) {
             const failedResults = results.filter((r) => !r.success);
             console.log(`\u{1F4CA} Execution summary: ${successfulResults.length} successful, ${failedResults.length} failed`);
             if (successfulResults.length > 0) {
-              console.log(`\u{1F4E6} Returning full ToolExecutionContext for compression`);
+              console.log(`\u{1F4E6} Returning full ToolExecutionReport for compression`);
               return executionContext;
             }
             if (lastResult && !lastResult.success) {
@@ -2757,88 +2766,43 @@ function extractToolDefinitionBlocks(toolBlock) {
   return definitionBlocks;
 }
 
-// agent/response-compressor.ts
-async function compressToolResponse(context) {
-  if (!isComplexResponse(context.rawResponse)) {
-    console.log(`\u{1F4E6} Response compressor: ${context.toolName} - No compression needed (simple response)`);
-    return context.rawResponse;
+// agent/response-pipeline.ts
+var ResponsePipeline = class {
+  middleware = [];
+  /**
+   * Add middleware to the pipeline
+   */
+  use(middleware) {
+    this.middleware.push(middleware);
   }
-  console.log(`\u{1F5DC}\uFE0F  Response compressor: ${context.toolName} - Compressing verbose response...`);
-  const conversationContext = context.recentMessages.slice(-3).map((m) => `${m.role}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`).join("\n");
-  const responseStr = formatResponse(context.rawResponse);
-  const originalSize = JSON.stringify(context.rawResponse).length;
-  if (typeof context.rawResponse === "string") {
-    const isConversational = context.rawResponse.includes("?") || context.rawResponse.includes("I") || context.rawResponse.includes("you") || context.rawResponse.length > 50;
-    if (isConversational) {
-      const response = context.rawResponse.length > 1e3 ? context.rawResponse.substring(0, 1e3) + "... [truncated]" : context.rawResponse;
-      console.log(`\u2705 Conversational response detected: ${originalSize} chars`);
-      return response;
+  /**
+   * Process a tool result through all middleware in order
+   */
+  async process(context) {
+    let result = context.result;
+    for (const mw of this.middleware) {
+      try {
+        const updatedContext = { ...context, result };
+        result = await mw.process(updatedContext);
+      } catch (error) {
+        console.error(`[ResponsePipeline] Error in middleware ${mw.name}:`, error);
+      }
     }
-    const compressed = context.rawResponse.length > 1e3 ? context.rawResponse.substring(0, 1e3) + "... [truncated]" : context.rawResponse;
-    console.log(`\u2705 Response compressed: ${originalSize} \u2192 ${compressed.length} chars`);
-    return compressed;
+    return result;
   }
-  if (context.rawResponse && typeof context.rawResponse === "object") {
-    if ("variables" in context.rawResponse && "nodes" in context.rawResponse) {
-      const ctx = context.rawResponse;
-      const summary = {
-        success: ctx.metadata?.nodesSucceeded > 0,
-        nodesExecuted: ctx.metadata?.nodesExecuted || 0,
-        variables: Object.fromEntries(ctx.variables || /* @__PURE__ */ new Map()),
-        errors: ctx.metadata?.nodesFailed > 0 ? "Some nodes failed" : null
-      };
-      console.log(`\u2705 Response compressed: ${originalSize} \u2192 ${JSON.stringify(summary).length} chars`);
-      return summary;
-    }
-    console.log(`\u2705 Response kept as-is: ${originalSize} chars (not complex enough)`);
-    return context.rawResponse;
+  /**
+   * Check if any middleware is configured
+   */
+  hasMiddleware() {
+    return this.middleware.length > 0;
   }
-  return context.rawResponse;
-}
-function isComplexResponse(response) {
-  if (typeof response === "string") {
-    return response.length > 2e3;
+  /**
+   * Get list of configured middleware names
+   */
+  getMiddlewareNames() {
+    return this.middleware.map((mw) => mw.name);
   }
-  if (response && typeof response === "object") {
-    if ("variables" in response && "nodes" in response && "metadata" in response) {
-      return true;
-    }
-  }
-  const size = JSON.stringify(response).length;
-  return size > 2e3;
-}
-function formatResponse(response) {
-  if (response && typeof response === "object" && "nodes" in response) {
-    const ctx = response;
-    const parts = [];
-    if (ctx.variables.size > 0) {
-      parts.push("Variables resolved:");
-      ctx.variables.forEach((value, key) => {
-        parts.push(`  ${key}: ${value}`);
-      });
-    }
-    if (ctx.nodes.size > 0) {
-      parts.push("\nNode executions:");
-      ctx.nodes.forEach((result, nodeId) => {
-        if (result.success) {
-          parts.push(`  \u2713 ${nodeId}: ${JSON.stringify(result.data)}`);
-        } else {
-          parts.push(`  \u2717 ${nodeId}: ${result.error}`);
-        }
-      });
-    }
-    if (ctx.metadata) {
-      parts.push(`
-Execution summary:`);
-      parts.push(`  Tool: ${ctx.metadata.toolName}`);
-      parts.push(`  Nodes executed: ${ctx.metadata.nodesExecuted}`);
-      parts.push(`  Succeeded: ${ctx.metadata.nodesSucceeded}`);
-      parts.push(`  Failed: ${ctx.metadata.nodesFailed}`);
-    }
-    return parts.join("\n");
-  }
-  return JSON.stringify(response, null, 2);
-}
+};
 
 // agent/agent.ts
 var Agent = class {
@@ -2849,6 +2813,7 @@ var Agent = class {
   context;
   aiTools = {};
   currentMessages = [];
+  responsePipeline;
   constructor(config) {
     this.program = config.program;
     this.model = config.model;
@@ -2858,20 +2823,20 @@ var Agent = class {
       agentId: this.program.id,
       activities: []
     };
+    this.responsePipeline = new ResponsePipeline();
+    if (config.responseMiddleware) {
+      config.responseMiddleware.forEach((mw) => this.responsePipeline.use(mw));
+    }
     this.initializeTools();
   }
   /**
    * Initialize tools for AI SDK
    */
   initializeTools() {
-    const customTools = extractCustomTools(
-      this.program,
-      this.tools,
-      () => {
-        const lastUserMessage = this.currentMessages.filter((m) => m.role === "user").pop();
-        return typeof lastUserMessage?.content === "string" ? lastUserMessage.content : JSON.stringify(lastUserMessage?.content || "");
-      }
-    );
+    const customTools = extractCustomTools(this.program, this.tools, () => {
+      const lastUserMessage = this.currentMessages.filter((m) => m.role === "user").pop();
+      return typeof lastUserMessage?.content === "string" ? lastUserMessage.content : JSON.stringify(lastUserMessage?.content || "");
+    });
     const allTools = mergeToolRegistries(this.tools, customTools);
     for (const [name, tool] of Object.entries(allTools)) {
       const aiToolName = toAzureFunctionName(name);
@@ -2889,14 +2854,13 @@ var Agent = class {
             const content = params.content || "";
             delete params.content;
             const result = await tool.execute(params, content, context);
-            const isCustomTool = name.startsWith("custom:");
-            const finalResult = isCustomTool ? await compressToolResponse({
+            const finalResult = await this.responsePipeline.process({
               toolName: name,
-              toolParams: params,
-              toolContent: content,
-              rawResponse: result,
-              recentMessages: this.currentMessages.slice(-3)
-            }) : result;
+              params,
+              result,
+              messages: this.currentMessages.slice(-3)
+            });
+            const isCustomTool = name.startsWith("custom:");
             if (isCustomTool) {
               console.log(`\u{1F3AF} Custom tool ${name} executed and compressed`);
             }
@@ -2935,11 +2899,18 @@ var Agent = class {
   getSystemPrompt() {
     const memoryContext = this.memory.formatForPrompt();
     const toolNames = Object.keys(this.aiTools);
-    return buildDetailedSystemPrompt(
+    const systemPrompt = buildDetailedSystemPrompt(
       this.program,
       toolNames,
       memoryContext
     );
+    console.log(
+      `[Agent] \u{1F4DD} System prompt generated (${systemPrompt.length} chars)`
+    );
+    console.log(
+      `[Agent] \u{1F4DD} System prompt contains response_guidelines: ${systemPrompt.includes("response_guidelines")}`
+    );
+    return systemPrompt;
   }
   /**
    * Execute a chat message (non-streaming)
@@ -3006,16 +2977,10 @@ var Agent = class {
         tools: this.aiTools,
         maxSteps: options?.maxSteps ?? 10,
         temperature: options?.temperature ?? 0.7,
-        onChunk: async ({ chunk }) => {
-          if (chunk.type === "text-delta" && options?.onChunk) {
-            options.onChunk(chunk.textDelta);
-          }
-          if (chunk.type === "tool-call" && options?.onToolCall) {
-            const originalToolName = fromAzureFunctionName(chunk.toolName);
-            options.onToolCall(originalToolName, chunk.args);
-          }
-        },
         onFinish: async ({ text, toolCalls, usage, finishReason }) => {
+          console.log(
+            `[Agent] \u{1F3AF} Final finish - reason: ${finishReason}, text length: ${text.length}, toolCalls: ${toolCalls?.length || 0}`
+          );
           activity.assistantMessage = text;
           if (toolCalls && toolCalls.length > 0) {
             activity.toolCalls = toolCalls.map((tc) => ({
@@ -3074,6 +3039,7 @@ export {
   DocumentExecutor,
   GRAMMAR,
   GrammarCompiler,
+  ResponsePipeline,
   applyDiff,
   applyResolvedVariables,
   buildDetailedSystemPrompt,

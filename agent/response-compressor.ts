@@ -6,7 +6,7 @@
  */
 
 import { Message } from 'ai';
-import { ToolExecutionContext } from '../document/execution-types';
+import { ToolExecutionReport } from '../document/execution-types';
 
 export interface CompressionContext {
   toolName: string;
@@ -73,16 +73,63 @@ export async function compressToolResponse(
   if (context.rawResponse && typeof context.rawResponse === 'object') {
     // For objects, extract key fields or summarize
     if ('variables' in context.rawResponse && 'nodes' in context.rawResponse) {
-      // ToolExecutionContext - extract summary
-      const ctx = context.rawResponse as ToolExecutionContext;
+      // ToolExecutionReport - use basic summarizing strategy
+      const ctx = context.rawResponse as ToolExecutionReport;
+      
+      // Generate a human-readable message for the LLM
+      const toolName = ctx.metadata?.toolName || 'Custom tool';
+      const nodesExecuted = ctx.metadata?.nodesExecuted || 0;
+      const nodesSucceeded = ctx.metadata?.nodesSucceeded || 0;
+      const nodesFailed = ctx.metadata?.nodesFailed || 0;
+      
+      // Build the summary message
+      let message = `${toolName} executed successfully.`;
+      
+      if (nodesExecuted > 0) {
+        message += ` Completed ${nodesExecuted} operations`;
+        if (nodesFailed > 0) {
+          message += ` (${nodesFailed} failed)`;
+        }
+        message += '.';
+      }
+      
+      // Add variable context if available
+      if (ctx.variables && ctx.variables.size > 0) {
+        const varsText = Array.from(ctx.variables.entries())
+          .map(([key, value]) => `${key}: ${value}`)
+          .join(', ');
+        message += ` Variables resolved: ${varsText}.`;
+      }
+      
+      // Get the final result for additional context
+      const results = Array.from(ctx.nodes.values());
+      const lastSuccess = results.reverse().find(r => r.success);
+      
+      if (lastSuccess?.data) {
+        // Try to extract meaningful info from the result
+        if (typeof lastSuccess.data === 'object' && lastSuccess.data !== null) {
+          const data = lastSuccess.data as any;
+          if (data.message) {
+            message += ` Result: ${data.message}`;
+          } else if (data.results && Array.isArray(data.results)) {
+            message += ` Found ${data.results.length} results.`;
+          }
+        }
+      }
+      
       const summary = {
-        success: ctx.metadata?.nodesSucceeded > 0,
-        nodesExecuted: ctx.metadata?.nodesExecuted || 0,
-        variables: Object.fromEntries(ctx.variables || new Map()),
-        errors: ctx.metadata?.nodesFailed > 0 ? 'Some nodes failed' : null
+        message,
+        success: nodesSucceeded > 0,
+        metadata: {
+          nodesExecuted,
+          nodesSucceeded,
+          nodesFailed,
+          variables: ctx.variables ? Object.fromEntries(ctx.variables) : {},
+          toolName
+        }
       };
       
-      console.log(`✅ Response compressed: ${originalSize} → ${JSON.stringify(summary).length} chars`);
+      console.log(`✅ Response compressed (basic summarizing): ${originalSize} → ${JSON.stringify(summary).length} chars`);
       return summary;
     }
     

@@ -117,7 +117,7 @@ export function extractCustomTools(
             
             // If we have successful results, return the full context for compression
             if (successfulResults.length > 0) {
-              console.log(`📦 Returning full ToolExecutionContext for compression`);
+              console.log(`📦 Returning full ToolExecutionReport for compression`);
               return executionContext;
             }
             
