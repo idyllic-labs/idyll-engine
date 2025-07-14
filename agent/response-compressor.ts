@@ -72,14 +72,14 @@ export async function compressToolResponse(
   
   if (context.rawResponse && typeof context.rawResponse === 'object') {
     // For objects, extract key fields or summarize
-    if ('variables' in context.rawResponse && 'blocks' in context.rawResponse) {
+    if ('variables' in context.rawResponse && 'nodes' in context.rawResponse) {
       // ToolExecutionContext - extract summary
-      const ctx = context.rawResponse as any;
+      const ctx = context.rawResponse as ToolExecutionContext;
       const summary = {
-        success: ctx.metadata?.blocksSucceeded > 0,
-        blocksExecuted: ctx.metadata?.blocksExecuted || 0,
+        success: ctx.metadata?.nodesSucceeded > 0,
+        nodesExecuted: ctx.metadata?.nodesExecuted || 0,
         variables: Object.fromEntries(ctx.variables || new Map()),
-        errors: ctx.metadata?.blocksFailed > 0 ? 'Some blocks failed' : null
+        errors: ctx.metadata?.nodesFailed > 0 ? 'Some nodes failed' : null
       };
       
       console.log(`✅ Response compressed: ${originalSize} → ${JSON.stringify(summary).length} chars`);
@@ -106,7 +106,7 @@ function isComplexResponse(response: unknown): boolean {
   
   // ToolExecutionContext is always complex
   if (response && typeof response === 'object') {
-    if ('variables' in response && 'blocks' in response && 'metadata' in response) {
+    if ('variables' in response && 'nodes' in response && 'metadata' in response) {
       return true;
     }
   }
@@ -121,7 +121,7 @@ function isComplexResponse(response: unknown): boolean {
  */
 function formatResponse(response: unknown): string {
   // Special handling for ToolExecutionContext
-  if (response && typeof response === 'object' && 'blocks' in response) {
+  if (response && typeof response === 'object' && 'nodes' in response) {
     const ctx = response as ToolExecutionContext;
     const parts: string[] = [];
     
@@ -133,14 +133,14 @@ function formatResponse(response: unknown): string {
       });
     }
     
-    // Block results
-    if (ctx.blocks.size > 0) {
-      parts.push('\nBlock executions:');
-      ctx.blocks.forEach((result, blockId) => {
+    // Node results
+    if (ctx.nodes.size > 0) {
+      parts.push('\nNode executions:');
+      ctx.nodes.forEach((result, nodeId) => {
         if (result.success) {
-          parts.push(`  ✓ ${blockId}: ${JSON.stringify(result.data)}`);
+          parts.push(`  ✓ ${nodeId}: ${JSON.stringify(result.data)}`);
         } else {
-          parts.push(`  ✗ ${blockId}: ${result.error}`);
+          parts.push(`  ✗ ${nodeId}: ${result.error}`);
         }
       });
     }
@@ -149,9 +149,9 @@ function formatResponse(response: unknown): string {
     if (ctx.metadata) {
       parts.push(`\nExecution summary:`);
       parts.push(`  Tool: ${ctx.metadata.toolName}`);
-      parts.push(`  Blocks executed: ${ctx.metadata.blocksExecuted}`);
-      parts.push(`  Succeeded: ${ctx.metadata.blocksSucceeded}`);
-      parts.push(`  Failed: ${ctx.metadata.blocksFailed}`);
+      parts.push(`  Nodes executed: ${ctx.metadata.nodesExecuted}`);
+      parts.push(`  Succeeded: ${ctx.metadata.nodesSucceeded}`);
+      parts.push(`  Failed: ${ctx.metadata.nodesFailed}`);
     }
     
     return parts.join('\n');

@@ -1,5 +1,40 @@
 # Changelog
 
+## [3.1.0] - 2025-07-14
+
+### ✨ Features
+
+**Unified Content Field:**
+- **BREAKING**: ExecutableNode now uses `content` field instead of `instructions` for consistency with ContentNode
+- `edit:content` operation now works uniformly on both ContentNode and ExecutableNode types
+
+**Content Trimming:**
+- Automatic whitespace trimming in `edit:content` operations
+- Empty text items are removed after trimming
+- Rich content elements (variables, mentions, etc.) are preserved
+
+**Cleaner XML Serialization:**
+- Default prop values are now filtered out during serialization (e.g., `textColor="default"`)
+- Significantly reduces XML verbosity and file size
+- Only non-default, meaningful props are included in output
+
+**Improved Error Handling:**
+- More robust handling of null/undefined content items
+- Better validation for variable elements
+- Defensive programming for edge cases
+
+### 🐛 Bug Fixes
+
+- Fixed `edit:content` to work on ExecutableNode (trigger/function_call blocks)
+- Fixed test failures related to `instructions` → `content` migration
+- Fixed TypeScript errors in blocknote converter
+
+### 🔧 Internal Improvements
+
+- Consistent API across all node types
+- Better code maintainability with unified content handling
+- Comprehensive test coverage for all new features
+
 ## [3.0.0] - 2025-07-14
 
 ### 💥 BREAKING: Complete API Cleanup - Backward Compatibility Removed

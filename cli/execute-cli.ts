@@ -2,7 +2,7 @@
 
 import { parseArgs } from 'util';
 import { readFileSync, writeFileSync } from 'fs';
-import { parseXML, serializeToXML } from '../document/parser-grammar';
+import { parseXmlToAst, serializeAstToXml } from '../document/parser-grammar';
 import type { IdyllDocument, AgentDocument, DiffDocument } from '../document/ast';
 import { DocumentExecutor } from '../document/executor';
 import { createDemoTools } from './demo-tools';
@@ -92,7 +92,7 @@ function parseDocument(filePath: string): void {
   console.log(pc.cyan('Parsing document...'));
   
   const content = readFileSync(filePath, 'utf-8');
-  const document = parseXML(content);
+  const document = parseXmlToAst(content);
   
   console.log(pc.green('✓ Document parsed successfully'));
   
@@ -111,7 +111,7 @@ function parseDocument(filePath: string): void {
       default:
         console.log(pc.blue('📄 Regular Document'));
         if ('blocks' in document) {
-          console.log(`  Blocks: ${(document as IdyllDocument).blocks.length}`);
+          console.log(`  Nodes: ${(document as IdyllDocument).nodes.length}`);
         }
     }
   }
@@ -120,7 +120,7 @@ function parseDocument(filePath: string): void {
   console.log(JSON.stringify(document, null, 2));
   
   console.log('\nSerializing back to XML:');
-  console.log(serializeToXML(document));
+  console.log(serializeAstToXml(document));
 }
 
 /**
@@ -132,7 +132,7 @@ function validateDocument(filePath: string): void {
   const content = readFileSync(filePath, 'utf-8');
   
   try {
-    parseXML(content);
+    parseXmlToAst(content);
     console.log(pc.green('✓ Document is valid'));
   } catch (error) {
     console.log(pc.red('✗ Document is invalid'));
@@ -153,7 +153,7 @@ async function executeDocument(
   console.log(pc.cyan('Executing document...'));
   
   const content = readFileSync(filePath, 'utf-8');
-  const parsed = parseXML(content);
+  const parsed = parseXmlToAst(content);
   
   // Check if it's a regular document
   if ('type' in parsed && parsed.type === 'diff') {
@@ -182,15 +182,15 @@ async function executeDocument(
   console.log('\n' + pc.green('Execution Complete'));
   console.log(pc.gray('─'.repeat(50)));
   console.log(`Total duration: ${pc.yellow(report.metadata.totalDuration + 'ms')}`);
-  console.log(`Blocks executed: ${pc.yellow(report.metadata.blocksExecuted.toString())}`);
-  console.log(`Succeeded: ${pc.green(report.metadata.blocksSucceeded.toString())}`);
-  console.log(`Failed: ${pc.red(report.metadata.blocksFailed.toString())}`);
+  console.log(`Nodes executed: ${pc.yellow(report.metadata.nodesExecuted.toString())}`);
+  console.log(`Succeeded: ${pc.green(report.metadata.nodesSucceeded.toString())}`);
+  console.log(`Failed: ${pc.red(report.metadata.nodesFailed.toString())}`);
   
   console.log('\n' + pc.cyan('Results:'));
   console.log(pc.gray('─'.repeat(50)));
   
-  for (const [blockId, result] of report.blocks) {
-    console.log(`\n${pc.blue('Block:')} ${blockId}`);
+  for (const [nodeId, result] of report.nodes) {
+    console.log(`\n${pc.blue('Node:')} ${nodeId}`);
     if (result.success) {
       console.log(`${pc.green('✓ Success')} (${result.duration}ms)`);
       console.log('Result:', JSON.stringify(result.data, null, 2));
@@ -206,7 +206,7 @@ async function executeDocument(
     
     // Apply results to document
     const updatedDocument = applyExecutionResults(document, report);
-    const updatedXml = serializeToXML(updatedDocument);
+    const updatedXml = serializeAstToXml(updatedDocument);
     
     // Save to new file
     const outputPath = filePath.replace(/\.xml$/, '-executed.xml');
@@ -225,8 +225,8 @@ function applyExecutionResults(document: IdyllDocument, report: any): IdyllDocum
   // Apply results to executable blocks
   function applyToBlocks(blocks: any[]): void {
     for (const block of blocks) {
-      if ((block.type === 'function_call' || block.type === 'trigger') && report.blocks.has(block.id)) {
-        const result = report.blocks.get(block.id);
+      if ((block.type === 'function_call' || block.type === 'trigger') && report.nodes.has(block.id)) {
+        const result = report.nodes.get(block.id);
         if (result.success) {
           block.result = {
             success: true,
@@ -247,6 +247,6 @@ function applyExecutionResults(document: IdyllDocument, report: any): IdyllDocum
     }
   }
   
-  applyToBlocks(updated.blocks);
+  applyToBlocks(updated.nodes);
   return updated;
 }

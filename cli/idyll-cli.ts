@@ -11,7 +11,7 @@
 import { readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import chalk from 'chalk';
-import { parseXML, serializeToXML, validateDocument } from '../index';
+import { parseXmlToAst, serializeAstToXml, validateDocument } from '../index';
 import type { ToolResolver, ToolExecutor, ToolResult, ValidationContext, DocumentExecutionContext } from '../types';
 
 // Mock tool resolver for testing
@@ -96,7 +96,7 @@ async function parseCommand(filePath: string) {
     const content = readFileSync(resolve(filePath), 'utf-8');
     console.log(chalk.blue('Parsing document...'));
     
-    const document = parseXML(content);
+    const document = parseXmlToAst(content);
     console.log(chalk.green('✓ Document parsed successfully'));
     
     // Detect and display document type
@@ -112,14 +112,14 @@ async function parseCommand(filePath: string) {
       }
     } else {
       console.log(chalk.green('📄 Regular Document'));
-      console.log(chalk.gray(`  Blocks: ${document.blocks.length}`));
+      console.log(chalk.gray(`  Nodes: ${document.nodes.length}`));
     }
     
     console.log(chalk.blue('\nDocument Structure:'));
     console.log(JSON.stringify(document, null, 2));
     
     console.log(chalk.blue('\nSerializing back to XML:'));
-    const xml = serializeToXML(document);
+    const xml = serializeAstToXml(document);
     console.log(xml);
     
   } catch (error) {
@@ -133,7 +133,7 @@ async function validateCommand(filePath: string) {
     const content = readFileSync(resolve(filePath), 'utf-8');
     console.log(chalk.blue('Validating document...'));
     
-    const parsed = parseXML(content);
+    const parsed = parseXmlToAst(content);
     
     // Only validate regular documents and agent documents
     if ('type' in parsed && parsed.type === 'diff') {
@@ -173,7 +173,7 @@ async function executeCommand(filePath: string) {
     const content = readFileSync(resolve(filePath), 'utf-8');
     console.log(chalk.blue('Executing document...'));
     
-    const parsed = parseXML(content);
+    const parsed = parseXmlToAst(content);
     
     // Only execute regular documents and agent documents
     if ('type' in parsed && parsed.type === 'diff') {
@@ -236,7 +236,7 @@ async function executeCommand(filePath: string) {
     }
     
     console.log(chalk.blue('\nUpdated document:'));
-    const xml = serializeToXML(result.document);
+    const xml = serializeAstToXml(result.document);
     */
     // console.log(xml);
     

@@ -19,7 +19,8 @@
       "Bash(bun test:*)",
       "Bash(bun:*)",
       "Bash(git add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

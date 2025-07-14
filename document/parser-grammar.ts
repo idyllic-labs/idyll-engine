@@ -317,7 +317,7 @@ function parseFunctionCall(
   const tool = attrs["idyll-tool"] as string;
 
   let parameters: Record<string, unknown> = {};
-  let instructions: RichContent[] = [];
+  let content: RichContent[] = [];
   let result: unknown;
 
   // Parse child elements according to grammar
@@ -336,7 +336,7 @@ function parseFunctionCall(
           break;
 
         case "content":
-          instructions = parseRichContent(child);
+          content = parseRichContent(child);
           break;
 
         case "result":
@@ -358,7 +358,7 @@ function parseFunctionCall(
     type: "function_call",
     tool,
     parameters,
-    instructions: instructions.length > 0 ? instructions : undefined,
+    content: content.length > 0 ? content : undefined,
     result: result ? { success: true, data: result } : undefined,
     metadata: {
       modelId: attrs.modelId as string,
@@ -378,7 +378,7 @@ function parseTrigger(
   const enabled = attrs.enabled !== false;
 
   let parameters: Record<string, unknown> = {};
-  let instructions: RichContent[] = [];
+  let content: RichContent[] = [];
 
   for (const child of element.elements || []) {
     if (child.type === "element" && child.name) {
@@ -395,7 +395,7 @@ function parseTrigger(
           break;
 
         case "content":
-          instructions = parseRichContent(child);
+          content = parseRichContent(child);
           break;
       }
     }
@@ -406,7 +406,7 @@ function parseTrigger(
     type: "trigger",
     tool,
     parameters,
-    instructions: instructions.length > 0 ? instructions : undefined,
+    content: content.length > 0 ? content : undefined,
     metadata: { enabled },
   };
 }
@@ -526,7 +526,8 @@ function parseRichContent(element: xml2js.Element): RichContent[] {
       const inlineElement = parseInlineElement(child);
       if (inlineElement) {
         if (Array.isArray(inlineElement)) {
-          content.push(...inlineElement);
+          // Filter out any null values from the array
+          content.push(...inlineElement.filter(item => item != null));
         } else {
           content.push(inlineElement);
         }
@@ -565,6 +566,13 @@ function parseInlineElement(
     const name = element.attributes?.name as string;
     const prompt = element.attributes?.prompt as string;
     const value = element.attributes?.value as string;
+    
+    // Variable must have a name
+    if (!name) {
+      console.warn('Variable element missing required "name" attribute');
+      return null;
+    }
+    
     return {
       type: "variable",
       name,
@@ -771,11 +779,11 @@ function serializeExecutableNode(node: ExecutableNode): xml2js.Element {
   }
 
   // Add content
-  if (node.instructions && node.instructions.length > 0) {
+  if (node.content && node.content.length > 0) {
     elements.push({
       type: "element",
       name: "content",
-      elements: serializeRichContent(node.instructions),
+      elements: serializeRichContent(node.content),
     });
   }
 
@@ -892,7 +900,7 @@ function serializeContentNode(node: ContentNode): xml2js.Element {
     name: elementName,
     attributes: {
       id: node.id,
-      ...node.props,
+      ...cleanProps(node.props),
     },
     elements: elements.length > 0 ? elements : undefined,
   };
@@ -1045,6 +1053,45 @@ function serializeMetadata(
     result.modified = metadata.modified.toISOString();
 
   return result;
+}
+
+/**
+ * Clean props by removing default/empty values to reduce XML verbosity
+ */
+function cleanProps(props?: Record<string, unknown>): Record<string, unknown> {
+  if (!props) return {};
+
+  const cleaned: Record<string, unknown> = {};
+  
+  // Default values to exclude
+  const defaultValues = new Set([
+    'default',
+    'left',     // default text alignment
+    'normal',   // default font weight, etc.
+    '',         // empty strings
+    null,
+    undefined
+  ]);
+
+  for (const [key, value] of Object.entries(props)) {
+    // Skip default values
+    if (defaultValues.has(value as any)) {
+      continue;
+    }
+    
+    // Skip empty arrays and objects
+    if (Array.isArray(value) && value.length === 0) {
+      continue;
+    }
+    if (value && typeof value === 'object' && Object.keys(value).length === 0) {
+      continue;
+    }
+    
+    // Keep non-default values
+    cleaned[key] = value;
+  }
+
+  return cleaned;
 }
 
 /**

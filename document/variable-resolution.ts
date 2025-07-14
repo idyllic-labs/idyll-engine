@@ -57,9 +57,9 @@ export function extractVariableDefinitions(nodes: Node[]): VariableDefinition[] 
       processContent(node.content, node.id);
     }
     
-    // Check executable node instructions
-    if ('instructions' in node && node.instructions) {
-      processContent(node.instructions, node.id);
+    // Check executable node content
+    if ('content' in node && node.content) {
+      processContent(node.content, node.id);
     }
   }
   
@@ -140,8 +140,8 @@ function extractVariablesFromNode(node: Node): VariableElement[] {
     extractFromContent(node.content);
   }
   
-  if ('instructions' in node && node.instructions) {
-    extractFromContent(node.instructions);
+  if ('content' in node && node.content) {
+    extractFromContent(node.content);
   }
   
   return variables;
@@ -237,8 +237,8 @@ export function applyResolvedVariables(
       node.content = applyToContent(node.content);
     }
     
-    if ('instructions' in node && node.instructions) {
-      node.instructions = applyToContent(node.instructions);
+    if ('content' in node && node.content) {
+      node.content = applyToContent(node.content);
     }
   }
   

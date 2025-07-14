@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import { createToolRegistry, defineTool } from '../document/tool-registry';
-import type { BlockExecutionContext } from '../document/execution-types';
+import type { NodeExecutionContext } from '../document/execution-types';
 
 export function createDemoTools() {
   return createToolRegistry({
@@ -21,7 +21,7 @@ export function createDemoTools() {
         const text = params.message || content || 'No message provided';
         return {
           message: params.uppercase ? text.toUpperCase() : text,
-          blockId: context.currentBlockId,
+          nodeId: context.currentNodeId,
           timestamp: new Date().toISOString(),
         };
       },
@@ -121,7 +121,7 @@ export function createDemoTools() {
     'demo:context': defineTool({
       schema: z.object({}),
       description: 'Shows execution context information',
-      execute: async (_, content, context: BlockExecutionContext) => {
+      execute: async (_, content, context: NodeExecutionContext) => {
         // Count previous results
         const previousCount = context.previousResults.size;
         const previousSuccess = Array.from(context.previousResults.values())
@@ -129,8 +129,8 @@ export function createDemoTools() {
         const previousFailed = previousCount - previousSuccess;
         
         return {
-          currentBlock: context.currentBlockId,
-          documentBlocks: context.document.blocks.length,
+          currentNode: context.currentNodeId,
+          documentNodes: context.document.nodes.length,
           previousExecutions: {
             total: previousCount,
             success: previousSuccess,
@@ -146,7 +146,7 @@ export function createDemoTools() {
         operation: z.enum(['sum', 'average', 'concat']).default('sum'),
       }),
       description: 'Aggregates results from previous executions',
-      execute: async (params, content, context: BlockExecutionContext) => {
+      execute: async (params, content, context: NodeExecutionContext) => {
         const previousResults = Array.from(context.previousResults.values())
           .filter(r => r.success)
           .map(r => r.data);
@@ -223,7 +223,7 @@ export function createDemoTools() {
         value: z.number().optional(),
       }),
       description: 'Conditional execution based on previous results',
-      execute: async (params, content, context: BlockExecutionContext) => {
+      execute: async (params, content, context: NodeExecutionContext) => {
         const previousResults = Array.from(context.previousResults.values());
         const hasErrors = previousResults.some(r => !r.success);
         const allSuccess = previousResults.every(r => r.success);

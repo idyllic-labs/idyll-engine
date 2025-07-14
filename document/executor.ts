@@ -175,7 +175,7 @@ export class DocumentExecutor<TApi = any> {
       }
       
       // Extract content as string
-      const content = this.extractContent(node.instructions);
+      const content = this.extractContent(node.content);
       
       // Execute with timeout
       const timeoutPromise = new Promise((_, reject) => {

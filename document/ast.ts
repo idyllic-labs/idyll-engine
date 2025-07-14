@@ -162,7 +162,7 @@ export interface ExecutableNode {
   type: ExecutableNodeType;
   tool: string; // e.g., "documents:create", "ai:generate-text"
   parameters: Record<string, unknown>;
-  instructions?: RichContent[]; // Natural language instructions
+  content?: RichContent[]; // Natural language content/instructions
   result?: ExecutionResult;
   metadata?: ExecutableMetadata;
   props?: Record<string, unknown>; // Additional properties for compatibility
@@ -342,8 +342,8 @@ export function extractMentions(nodes: Node[]): MentionElement[] {
     if ('content' in node && Array.isArray(node.content)) {
       extractFromContent(node.content);
     }
-    if (isExecutableNode(node) && node.instructions) {
-      extractFromContent(node.instructions);
+    if (isExecutableNode(node) && node.content) {
+      extractFromContent(node.content);
     }
   }
   
@@ -370,8 +370,8 @@ export function extractVariables(nodes: Node[]): VariableElement[] {
     if ('content' in node && Array.isArray(node.content)) {
       extractFromContent(node.content);
     }
-    if (isExecutableNode(node) && node.instructions) {
-      extractFromContent(node.instructions);
+    if (isExecutableNode(node) && node.content) {
+      extractFromContent(node.content);
     }
   }
   

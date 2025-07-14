@@ -6,7 +6,7 @@
  * with an external AI model provider (e.g., from Vercel AI SDK).
  */
 
-import { Agent, createToolRegistry, defineTool, parseXML, AgentDefinition } from '@idyllic-labs/idyll-engine';
+import { Agent, createToolRegistry, defineTool, parseXmlToAst, AgentDefinition } from '@idyllic-labs/idyll-engine';
 import { createAzure } from '@ai-sdk/azure';
 // import { openai } from '@ai-sdk/openai'; // Uncomment if using OpenAI instead
 import { Message } from 'ai';

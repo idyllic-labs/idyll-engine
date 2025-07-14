@@ -9,7 +9,7 @@
 import * as readline from "readline/promises";
 import { stdin as input, stdout as output } from "process";
 import chalk from "chalk";
-import { parseXML } from "../document/parser-grammar";
+import { parseXmlToAst } from "../document/parser-grammar";
 import { AgentDocument } from "../document/ast";
 import { Agent } from "../agent/agent";
 import { createToolRegistry, defineTool } from "../document/tool-registry";
@@ -101,7 +101,7 @@ const commands = {
 
     try {
       const xml = await fs.readFile(agentPath, "utf-8");
-      const parsed = parseXML(xml);
+      const parsed = parseXmlToAst(xml);
 
       if (!("type" in parsed) || parsed.type !== "agent") {
         console.log(

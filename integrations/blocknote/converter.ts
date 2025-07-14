@@ -74,7 +74,7 @@ function convertBlockNoteBlock(bnBlock: BlockNoteBlock): Node {
       type: 'trigger',
       tool: props.trigger || '',
       parameters: props.params ? JSON.parse(props.params) : {},
-      instructions: Array.isArray(content) ? convertBlockNoteContent(content) : [],
+      content: Array.isArray(content) ? convertBlockNoteContent(content) : [],
       metadata: {
         enabled: props.enabled,
         modelId: props.modelId,
@@ -124,7 +124,7 @@ function convertBlockNoteBlock(bnBlock: BlockNoteBlock): Node {
         data: props.response || undefined,
         error: props.error || undefined
       },
-      instructions: Array.isArray(content) && content.length > 0 
+      content: Array.isArray(content) && content.length > 0 
         ? convertBlockNoteContent(content) 
         : [],
       metadata: {
@@ -248,8 +248,8 @@ function convertIdyllicNode(node: Node): BlockNoteBlock {
           enabled: node.metadata?.enabled ?? true,
           modelId: node.metadata?.modelId
         },
-        content: node.instructions && node.instructions.length > 0 
-          ? convertIdyllicContent(node.instructions) 
+        content: node.content && node.content.length > 0 
+          ? convertIdyllicContent(node.content) 
           : [{ type: 'text', text: '', styles: {} }],
         children: []
       };
@@ -266,8 +266,8 @@ function convertIdyllicNode(node: Node): BlockNoteBlock {
           error: node.result?.error ? JSON.stringify(node.result.error) : '',
           modelId: node.metadata?.modelId
         },
-        content: node.instructions && node.instructions.length > 0 
-          ? convertIdyllicContent(node.instructions) 
+        content: node.content && node.content.length > 0 
+          ? convertIdyllicContent(node.content) 
           : [{ type: 'text', text: '', styles: {} }],
         children: []
       };

@@ -6,6 +6,7 @@
 
 import { 
   Node, 
+  RichContent,
   EditOperation, 
   EditAttrOperation,
   EditContentOperation,
@@ -121,11 +122,16 @@ function applyEditContent(nodes: Node[], op: EditContentOperation): Node[] {
   const result = nodes.map(node => {
     if (node.id === op.blockId) {
       found = true;
-      // Only content nodes have content property
+      
+      // Both ContentNode and ExecutableNode use the content field
       if ('content' in node) {
-        return { ...node, content: op.content };
-      } else {
-        throw new Error(`Block ${op.blockId} is not a content node`);
+        // Trim whitespace from text content
+        const trimmedContent = trimContent(op.content);
+        return { ...node, content: trimmedContent };
+      }
+      // Node does not have editable content
+      else {
+        throw new Error(`Block ${op.blockId} does not have editable content`);
       }
     }
     
@@ -371,6 +377,43 @@ function findNodeById(nodes: Node[], id: string): Node | null {
   }
   
   return null;
+}
+
+/**
+ * Trim whitespace from RichContent array
+ */
+function trimContent(content: RichContent[]): RichContent[] {
+  if (!content || content.length === 0) {
+    return content || [];
+  }
+  
+  const result = content
+    .filter(item => item != null) // Filter out null/undefined items
+    .map(item => {
+      if (!item || typeof item !== 'object') {
+        console.warn('Invalid content item:', item);
+        return null;
+      }
+      
+      if (item.type === 'text' && 'text' in item) {
+        // Ensure text property exists and is a string
+        const text = String(item.text || '').trim();
+        return {
+          ...item,
+          text
+        };
+      }
+      return item;
+    })
+    .filter(item => item != null); // Remove any nulls from invalid items
+  
+  // Remove empty text items after trimming
+  return result.filter(item => {
+    if (item && item.type === 'text') {
+      return item.text && item.text.length > 0;
+    }
+    return true;
+  });
 }
 
 // Re-export types for convenience

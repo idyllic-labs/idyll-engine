@@ -6,10 +6,10 @@
  */
 
 import { z } from 'zod';
-import { AgentDocument, Block, ContentBlock } from '../document/ast';
+import { AgentDocument, Node, ContentNode } from '../document/ast';
 import { ToolDefinition, ToolRegistry } from '../document/tool-registry';
 import { executeCustomTool, parseCustomTool } from '../document/custom-tool-executor';
-import { parseXML } from '../document/parser-grammar';
+import { parseXmlToAst } from '../document/parser-grammar';
 
 /**
  * Extract custom tools from agent document
@@ -24,7 +24,7 @@ export function extractCustomTools(
   console.log('🔍 Extracting custom tools from agent document...');
   
   // Find all tool blocks
-  for (const block of agentDoc.blocks) {
+  for (const block of agentDoc.nodes) {
     if (block.type === 'tool' && 'props' in block) {
       console.log('📦 Found tool block:', JSON.stringify(block, null, 2));
       const title = block.props?.title as string || 'Untitled Tool';
@@ -61,12 +61,12 @@ export function extractCustomTools(
           // Create a virtual document with the tool definition
           const toolDoc = {
             id: `custom-tool-${toolName}`,
-            blocks: definitionBlocks,
+            nodes: definitionBlocks,
           };
           
           // Create custom tool block for execution
-          const customToolBlock: ContentBlock = {
-            id: context.currentBlockId || 'custom-tool-exec',
+          const customToolBlock: ContentNode = {
+            id: context.currentNodeId || 'custom-tool-exec',
             type: 'tool',
             content: [],
             children: definitionBlocks,
@@ -101,15 +101,15 @@ export function extractCustomTools(
             });
             
             // Extract the final result
-            const lastBlockId = Array.from(executionContext.blocks.keys()).pop();
-            const lastResult = lastBlockId ? executionContext.blocks.get(lastBlockId) : undefined;
+            const lastNodeId = Array.from(executionContext.nodes.keys()).pop();
+            const lastResult = lastNodeId ? executionContext.nodes.get(lastNodeId) : undefined;
             
-            console.log(`🔍 Execution complete. Last block ID: ${lastBlockId}`);
+            console.log(`🔍 Execution complete. Last node ID: ${lastNodeId}`);
             console.log(`📋 Last result:`, lastResult);
-            console.log(`📊 All blocks:`, Array.from(executionContext.blocks.entries()));
+            console.log(`📊 All nodes:`, Array.from(executionContext.nodes.entries()));
             
             // Check if we have any successful results
-            const results = Array.from(executionContext.blocks.values());
+            const results = Array.from(executionContext.nodes.values());
             const successfulResults = results.filter(r => r.success);
             const failedResults = results.filter(r => !r.success);
             
@@ -146,7 +146,7 @@ export function extractCustomTools(
 /**
  * Extract text content from a block
  */
-function extractTextContent(block: Block): string {
+function extractTextContent(block: Node): string {
   if (!('content' in block) || !block.content) {
     return '';
   }
@@ -173,12 +173,12 @@ function extractTextContent(block: Block): string {
  *   </tool:definition>
  * </tool>
  */
-function extractToolDefinitionBlocks(toolBlock: Block): Block[] {
+function extractToolDefinitionBlocks(toolBlock: Node): Node[] {
   if (!('children' in toolBlock) || !toolBlock.children) {
     return [];
   }
   
-  const definitionBlocks: Block[] = [];
+  const definitionBlocks: Node[] = [];
   
   for (const child of toolBlock.children) {
     // Look for blocks with specific types from our parser

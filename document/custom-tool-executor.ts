@@ -132,19 +132,19 @@ function interpolateExecutableNodes(
   resolvedVariables: Map<string, string>
 ): Node[] {
   return nodes.map(node => {
-    if (isExecutableNode(node) && node.instructions) {
-      // Interpolate the instructions to create the content string
+    if (isExecutableNode(node) && node.content) {
+      // Interpolate the content to create the content string
       const interpolatedContent = interpolateContent(
-        node.instructions,
+        node.content,
         resolvedVariables
       );
       
       // Return a modified node with interpolated content
-      // Note: We're modifying the instructions to be a simple text content
+      // Note: We're modifying the content to be a simple text content
       // In a real implementation, we might want to preserve the structure
       return {
         ...node,
-        instructions: [{
+        content: [{
           type: 'text',
           text: interpolatedContent,
         }],

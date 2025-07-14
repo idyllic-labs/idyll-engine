@@ -49,7 +49,7 @@ describe('Idyll Engine', () => {
       if (block.type === 'function_call') {
         expect(block.tool).toBe('test:hello');
         expect(block.parameters).toEqual({ name: 'World' });
-        expect(block.instructions?.[0]).toMatchObject({
+        expect(block.content?.[0]).toMatchObject({
           type: 'text',
           text: 'Say hello to the world'
         });
@@ -132,7 +132,7 @@ describe('Idyll Engine', () => {
             type: 'function_call' as const,
             tool: 'test:greet',
             parameters: { name: 'Alice' },
-            instructions: [{ type: 'text' as const, text: 'Greet the user' }]
+            content: [{ type: 'text' as const, text: 'Greet the user' }]
           }
         ]
       };
