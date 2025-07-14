@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import type { IdyllDocument, Node, Block, ExecutableNode, ExecutableBlock } from './ast';
+import type { IdyllDocument, Node, ExecutableNode } from './ast';
 
 // ============================================
 // Execution Results

@@ -14,7 +14,7 @@ import {
   AgentExecuteResult,
   AgentActivity,
 } from "./types";
-import type { AgentDocument, Block } from '../document/ast';
+import type { AgentDocument } from '../document/ast';
 import { ActivityMemory } from "./memory";
 import { ToolRegistry } from "../document/tool-registry";
 import { NodeExecutionContext, BlockExecutionContext } from "../document/execution-types";

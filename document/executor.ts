@@ -9,9 +9,7 @@ import { z } from 'zod';
 import type { 
   IdyllDocument, 
   Node, 
-  Block, 
   ExecutableNode, 
-  ExecutableBlock, 
   RichContent 
 } from './ast';
 import type {

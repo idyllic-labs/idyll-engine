@@ -13,11 +13,8 @@ import {
   DiffDocument,
   EditOperation,
   Node,
-  Block,
   ContentNode,
-  ContentBlock,
   ExecutableNode,
-  ExecutableBlock,
   RichContent,
   TextContent,
   TextStyle,
@@ -25,7 +22,7 @@ import {
   VariableElement,
   LinkElement,
   AnnotationElement,
-  ContentBlockType,
+  ContentNodeType,
   isExecutableNode,
   isTextContent,
 } from "./ast";
@@ -316,7 +313,7 @@ function parseFunctionCall(
   element: xml2js.Element,
   id: string,
   attrs: Record<string, unknown>
-): ExecutableBlock {
+): ExecutableNode {
   const tool = attrs["idyll-tool"] as string;
 
   let parameters: Record<string, unknown> = {};
@@ -376,7 +373,7 @@ function parseTrigger(
   element: xml2js.Element,
   id: string,
   attrs: Record<string, unknown>
-): ExecutableBlock {
+): ExecutableNode {
   const tool = attrs["idyll-trigger"] as string;
   const enabled = attrs.enabled !== false;
 
@@ -421,13 +418,13 @@ function parseTool(
   element: xml2js.Element,
   id: string,
   attrs: Record<string, unknown>
-): ContentBlock {
+): ContentNode {
   // Tools are stored as content blocks with special props
   const title = attrs.title as string;
   const icon = attrs.icon as string;
 
   let description = "";
-  let definition: Block[] = [];
+  let definition: Node[] = [];
 
   for (const child of element.elements || []) {
     if (child.type === "element" && child.name) {
@@ -458,7 +455,7 @@ function parseTool(
 
   return {
     id,
-    type: "tool" as ContentBlockType,
+    type: "tool" as ContentNodeType,
     content: [{ type: "text", text: description }],
     children: definition.length > 0 ? definition : undefined,
     props: { title, icon },
@@ -473,11 +470,11 @@ function parseContentNode(
   id: string,
   attrs: Record<string, unknown>,
   blockType: string
-): ContentBlock {
+): ContentNode {
   const content = parseRichContent(element);
 
   // Parse children for nested blocks
-  const children: Block[] = [];
+  const children: Node[] = [];
   for (const child of element.elements || []) {
     if (child.type === "element" && child.name) {
       const childType = compiled.elementToType[child.name];
@@ -504,7 +501,7 @@ function parseContentNode(
 
   return {
     id,
-    type: blockType as ContentBlockType,
+    type: blockType as ContentNodeType,
     content,
     children: children.length > 0 ? children : undefined,
     props: attrs,

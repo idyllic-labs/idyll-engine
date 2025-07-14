@@ -2,14 +2,8 @@
 function isContentNode(node) {
   return !isExecutableNode(node);
 }
-function isContentBlock(block) {
-  return isContentNode(block);
-}
 function isExecutableNode(node) {
   return node.type === "function_call" || node.type === "trigger";
-}
-function isExecutableBlock(block) {
-  return isExecutableNode(block);
 }
 function isTextContent(content) {
   return content.type === "text";
@@ -28,9 +22,6 @@ function* traverseNodes(nodes) {
     }
   }
 }
-function* traverseBlocks(blocks) {
-  yield* traverseNodes(blocks);
-}
 function findNode(nodes, id) {
   for (const node of traverseNodes(nodes)) {
     if (node.id === id) {
@@ -38,9 +29,6 @@ function findNode(nodes, id) {
     }
   }
   return void 0;
-}
-function findBlock(blocks, id) {
-  return findNode(blocks, id);
 }
 function getExecutableNodes(nodes) {
   const executable = [];
@@ -50,9 +38,6 @@ function getExecutableNodes(nodes) {
     }
   }
   return executable;
-}
-function getExecutableBlocks(blocks) {
-  return getExecutableNodes(blocks);
 }
 function extractMentions(nodes) {
   const mentions = [];
@@ -833,14 +818,14 @@ function parseEditOperation(element) {
     case "edit:prop":
       return {
         type: "edit:attr",
-        nodeId: attrs["node-id"] || attrs["block-id"],
+        blockId: attrs["block-id"],
         name: attrs.name,
         value: attrs.value
       };
     case "edit:content":
       return {
         type: "edit:content",
-        nodeId: attrs["node-id"] || attrs["block-id"],
+        blockId: attrs["block-id"],
         content: parseRichContent(element)
       };
     case "insert":
@@ -855,16 +840,16 @@ function parseEditOperation(element) {
       }
       return {
         type: "insert",
-        afterNodeId: attrs["after-node-id"] || attrs["after-block-id"],
-        beforeNodeId: attrs["before-node-id"] || attrs["before-block-id"],
+        afterBlockId: attrs["after-block-id"],
+        beforeBlockId: attrs["before-block-id"],
         atStart: attrs["at-start"] === "true",
         atEnd: attrs["at-end"] === "true",
-        nodes: insertNodes
+        blocks: insertNodes
       };
     case "delete":
       return {
         type: "delete",
-        nodeId: attrs["node-id"] || attrs["block-id"]
+        blockId: attrs["block-id"]
       };
     case "replace":
       const replaceNodes = [];
@@ -878,8 +863,8 @@ function parseEditOperation(element) {
       }
       return {
         type: "replace",
-        nodeId: attrs["node-id"] || attrs["block-id"],
-        nodes: replaceNodes
+        blockId: attrs["block-id"],
+        blocks: replaceNodes
       };
     default:
       console.warn(`Unknown edit operation: ${element.name}`);
@@ -1464,7 +1449,7 @@ function serializeEditOperation(operation) {
         type: "element",
         name: "edit:prop",
         attributes: {
-          "node-id": operation.nodeId || operation.blockId,
+          "block-id": operation.blockId,
           name: operation.name,
           value: operation.value
         }
@@ -1474,7 +1459,7 @@ function serializeEditOperation(operation) {
         type: "element",
         name: "edit:content",
         attributes: {
-          "node-id": operation.nodeId || operation.blockId
+          "block-id": operation.blockId
         },
         elements: serializeRichContent(operation.content)
       };
@@ -1483,14 +1468,8 @@ function serializeEditOperation(operation) {
         type: "element",
         name: "insert",
         attributes: {
-          ...operation.afterNodeId && {
-            "after-node-id": operation.afterNodeId
-          },
           ...operation.afterBlockId && {
             "after-block-id": operation.afterBlockId
-          },
-          ...operation.beforeNodeId && {
-            "before-node-id": operation.beforeNodeId
           },
           ...operation.beforeBlockId && {
             "before-block-id": operation.beforeBlockId
@@ -1498,14 +1477,14 @@ function serializeEditOperation(operation) {
           ...operation.atStart && { "at-start": "true" },
           ...operation.atEnd && { "at-end": "true" }
         },
-        elements: operation.nodes.map(serializeNode)
+        elements: operation.blocks.map(serializeNode)
       };
     case "delete":
       return {
         type: "element",
         name: "delete",
         attributes: {
-          "node-id": operation.nodeId || operation.blockId
+          "block-id": operation.blockId
         }
       };
     case "replace":
@@ -1513,16 +1492,14 @@ function serializeEditOperation(operation) {
         type: "element",
         name: "replace",
         attributes: {
-          "node-id": operation.nodeId || operation.blockId
+          "block-id": operation.blockId
         },
-        elements: operation.nodes.map(serializeNode)
+        elements: operation.blocks.map(serializeNode)
       };
     default:
       throw new Error(`Unknown operation type`);
   }
 }
-var parseXML = parseXmlToAst;
-var serializeToXML = serializeAstToXml;
 
 // document/executor.ts
 import { z } from "zod";
@@ -1914,16 +1891,16 @@ function formatValidationIssues(issues) {
 }
 
 // document/variable-resolution.ts
-function extractVariableDefinitions(blocks) {
+function extractVariableDefinitions(nodes) {
   const definitions = /* @__PURE__ */ new Map();
   const seenNames = /* @__PURE__ */ new Set();
   let globalIndex = 0;
-  for (const block of traverseBlocks(blocks)) {
-    if ("content" in block && Array.isArray(block.content)) {
-      processContent(block.content, block.id);
+  for (const node of traverseNodes(nodes)) {
+    if ("content" in node && Array.isArray(node.content)) {
+      processContent(node.content, node.id);
     }
-    if ("instructions" in block && block.instructions) {
-      processContent(block.instructions, block.id);
+    if ("instructions" in node && node.instructions) {
+      processContent(node.instructions, node.id);
     }
   }
   function processContent(content, blockId) {
@@ -1945,11 +1922,11 @@ function extractVariableDefinitions(blocks) {
   }
   return Array.from(definitions.values());
 }
-function checkVariableRedeclaration(blocks) {
+function checkVariableRedeclaration(nodes) {
   const errors = [];
   const declarations = /* @__PURE__ */ new Map();
-  for (const block of traverseBlocks(blocks)) {
-    const variables = extractVariablesFromBlock(block);
+  for (const node of traverseNodes(nodes)) {
+    const variables = extractVariablesFromNode(node);
     for (const variable of variables) {
       const existing = declarations.get(variable.name);
       if (existing) {
@@ -1961,7 +1938,7 @@ function checkVariableRedeclaration(blocks) {
         }
       } else if (variable.prompt) {
         declarations.set(variable.name, {
-          blockId: block.id,
+          nodeId: node.id,
           prompt: variable.prompt
         });
       }
@@ -1969,7 +1946,7 @@ function checkVariableRedeclaration(blocks) {
   }
   return errors;
 }
-function extractVariablesFromBlock(block) {
+function extractVariablesFromNode(node) {
   const variables = [];
   function extractFromContent(content) {
     for (const item of content) {
@@ -1980,11 +1957,11 @@ function extractVariablesFromBlock(block) {
       }
     }
   }
-  if ("content" in block && Array.isArray(block.content)) {
-    extractFromContent(block.content);
+  if ("content" in node && Array.isArray(node.content)) {
+    extractFromContent(node.content);
   }
-  if ("instructions" in block && block.instructions) {
-    extractFromContent(block.instructions);
+  if ("instructions" in node && node.instructions) {
+    extractFromContent(node.instructions);
   }
   return variables;
 }
@@ -2038,14 +2015,14 @@ async function mockResolveVariable(definition, context) {
       return `Resolved: ${definition.name}`;
   }
 }
-function applyResolvedVariables(blocks, resolvedVariables) {
-  const clonedBlocks = JSON.parse(JSON.stringify(blocks));
-  for (const block of traverseBlocks(clonedBlocks)) {
-    if ("content" in block && Array.isArray(block.content)) {
-      block.content = applyToContent(block.content);
+function applyResolvedVariables(nodes, resolvedVariables) {
+  const clonedNodes = JSON.parse(JSON.stringify(nodes));
+  for (const node of traverseNodes(clonedNodes)) {
+    if ("content" in node && Array.isArray(node.content)) {
+      node.content = applyToContent(node.content);
     }
-    if ("instructions" in block && block.instructions) {
-      block.instructions = applyToContent(block.instructions);
+    if ("instructions" in node && node.instructions) {
+      node.instructions = applyToContent(node.instructions);
     }
   }
   function applyToContent(content) {
@@ -2067,7 +2044,7 @@ function applyResolvedVariables(blocks, resolvedVariables) {
       return item;
     });
   }
-  return clonedBlocks;
+  return clonedNodes;
 }
 function interpolateContent(content, resolvedVariables) {
   let result = "";
@@ -2231,9 +2208,8 @@ function applyDiff(nodes, operations) {
 }
 function applyEditAttr(nodes, op) {
   let found = false;
-  const nodeId = op.nodeId || op.blockId;
   const result = nodes.map((node) => {
-    if (node.id === nodeId) {
+    if (node.id === op.blockId) {
       found = true;
       return {
         ...node,
@@ -2250,20 +2226,19 @@ function applyEditAttr(nodes, op) {
     return node;
   });
   if (!found) {
-    throw new Error(`Node not found: ${nodeId}`);
+    throw new Error(`Block not found: ${op.blockId}`);
   }
   return result;
 }
 function applyEditContent(nodes, op) {
   let found = false;
-  const nodeId = op.nodeId || op.blockId;
   const result = nodes.map((node) => {
-    if (node.id === nodeId) {
+    if (node.id === op.blockId) {
       found = true;
       if ("content" in node) {
         return { ...node, content: op.content };
       } else {
-        throw new Error(`Node ${nodeId} is not a content node`);
+        throw new Error(`Block ${op.blockId} is not a content node`);
       }
     }
     if ("children" in node && node.children && node.children.length > 0) {
@@ -2276,20 +2251,19 @@ function applyEditContent(nodes, op) {
     return node;
   });
   if (!found) {
-    throw new Error(`Node not found: ${nodeId}`);
+    throw new Error(`Block not found: ${op.blockId}`);
   }
   return result;
 }
 function applyEditParams(nodes, op) {
   let found = false;
-  const nodeId = op.nodeId || op.blockId;
   const result = nodes.map((node) => {
-    if (node.id === nodeId) {
+    if (node.id === op.blockId) {
       found = true;
       if ("parameters" in node) {
         return { ...node, parameters: op.params };
       } else {
-        throw new Error(`Node ${nodeId} is not an executable node`);
+        throw new Error(`Block ${op.blockId} is not an executable node`);
       }
     }
     if ("children" in node && node.children && node.children.length > 0) {
@@ -2302,15 +2276,14 @@ function applyEditParams(nodes, op) {
     return node;
   });
   if (!found) {
-    throw new Error(`Node not found: ${nodeId}`);
+    throw new Error(`Block not found: ${op.blockId}`);
   }
   return result;
 }
 function applyEditId(nodes, op) {
   let found = false;
-  const nodeId = op.nodeId || op.blockId;
   const result = nodes.map((node) => {
-    if (node.id === nodeId) {
+    if (node.id === op.blockId) {
       found = true;
       return { ...node, id: op.newId };
     }
@@ -2324,48 +2297,45 @@ function applyEditId(nodes, op) {
     return node;
   });
   if (!found) {
-    throw new Error(`Node not found: ${nodeId}`);
+    throw new Error(`Block not found: ${op.blockId}`);
   }
   return result;
 }
 function applyInsert(nodes, op) {
-  const afterNodeId = op.afterNodeId || op.afterBlockId;
-  const beforeNodeId = op.beforeNodeId || op.beforeBlockId;
-  const positionCount = [op.atStart, op.atEnd, afterNodeId, beforeNodeId].filter(Boolean).length;
+  const positionCount = [op.atStart, op.atEnd, op.afterBlockId, op.beforeBlockId].filter(Boolean).length;
   if (positionCount !== 1) {
     throw new Error("Insert operation must specify exactly one position");
   }
-  const nodesToInsert = op.nodes.map((node) => ({
-    ...node,
-    id: node.id || uuidv42()
+  const blocksToInsert = op.blocks.map((block) => ({
+    ...block,
+    id: block.id || uuidv42()
   }));
   if (op.atStart) {
-    return [...nodesToInsert, ...nodes];
+    return [...blocksToInsert, ...nodes];
   }
   if (op.atEnd) {
-    return [...nodes, ...nodesToInsert];
+    return [...nodes, ...blocksToInsert];
   }
   const result = [];
   let inserted = false;
   for (const node of nodes) {
-    if (beforeNodeId && node.id === beforeNodeId) {
-      result.push(...nodesToInsert);
+    if (op.beforeBlockId && node.id === op.beforeBlockId) {
+      result.push(...blocksToInsert);
       inserted = true;
     }
     result.push(node);
-    if (afterNodeId && node.id === afterNodeId) {
-      result.push(...nodesToInsert);
+    if (op.afterBlockId && node.id === op.afterBlockId) {
+      result.push(...blocksToInsert);
       inserted = true;
     }
   }
   if (!inserted) {
-    throw new Error(`Could not find anchor node for insert operation`);
+    throw new Error(`Could not find anchor block for insert operation`);
   }
   return result;
 }
 function applyDelete(nodes, op) {
-  const nodeId = op.nodeId || op.blockId;
-  return nodes.filter((node) => node.id !== nodeId).map((node) => {
+  return nodes.filter((node) => node.id !== op.blockId).map((node) => {
     if ("children" in node && node.children && node.children.length > 0) {
       return { ...node, children: applyDelete(node.children, op) };
     }
@@ -2373,81 +2343,73 @@ function applyDelete(nodes, op) {
   });
 }
 function applyReplace(nodes, op) {
-  const nodeId = op.nodeId || op.blockId;
-  const replacementNodes = op.nodes.map((node, index) => {
-    const newId = op.nodes.length === 1 && index === 0 ? nodeId : node.id || uuidv42();
+  const replacementBlocks = op.blocks.map((block, index) => {
+    const newId = op.blocks.length === 1 && index === 0 ? op.blockId : block.id || uuidv42();
     return {
-      ...node,
+      ...block,
       id: newId
     };
   });
   const result = [];
   let replaced = false;
   for (const node of nodes) {
-    if (node.id === nodeId) {
-      result.push(...replacementNodes);
+    if (node.id === op.blockId) {
+      result.push(...replacementBlocks);
       replaced = true;
     } else {
       result.push(node);
     }
   }
   if (!replaced) {
-    throw new Error(`Could not find node ${nodeId} to replace`);
+    throw new Error(`Could not find block ${op.blockId} to replace`);
   }
   return result;
 }
 function applyMove(nodes, op) {
-  const nodeId = op.nodeId || op.blockId;
-  const nodeIds = op.nodeIds || op.blockIds;
-  const fromNodeId = op.fromNodeId || op.fromBlockId;
-  const toNodeId = op.toNodeId || op.toBlockId;
-  const afterNodeId = op.afterNodeId || op.afterBlockId;
-  const beforeNodeId = op.beforeNodeId || op.beforeBlockId;
-  let nodesToMove = [];
+  let blocksToMove = [];
   let remainingNodes = [];
-  if (nodeId) {
-    const nodeToMove = findNodeById(nodes, nodeId);
-    if (!nodeToMove) {
-      throw new Error(`Node not found: ${nodeId}`);
+  if (op.blockId) {
+    const blockToMove = findNodeById(nodes, op.blockId);
+    if (!blockToMove) {
+      throw new Error(`Block not found: ${op.blockId}`);
     }
-    nodesToMove = [nodeToMove];
-    remainingNodes = nodes.filter((n) => n.id !== nodeId);
-  } else if (nodeIds) {
-    const ids = nodeIds;
-    for (const id of ids) {
-      const node = findNodeById(nodes, id);
-      if (!node) {
-        throw new Error(`Node not found: ${id}`);
+    blocksToMove = [blockToMove];
+    remainingNodes = nodes.filter((n) => n.id !== op.blockId);
+  } else if (op.blockIds) {
+    for (const id of op.blockIds) {
+      const block = findNodeById(nodes, id);
+      if (!block) {
+        throw new Error(`Block not found: ${id}`);
       }
-      nodesToMove.push(node);
+      blocksToMove.push(block);
     }
-    remainingNodes = nodes.filter((n) => !ids.includes(n.id));
-  } else if (fromNodeId && toNodeId) {
-    const fromIndex = nodes.findIndex((n) => n.id === fromNodeId);
-    const toIndex = nodes.findIndex((n) => n.id === toNodeId);
+    remainingNodes = nodes.filter((n) => !op.blockIds.includes(n.id));
+  } else if (op.fromBlockId && op.toBlockId) {
+    const fromIndex = nodes.findIndex((n) => n.id === op.fromBlockId);
+    const toIndex = nodes.findIndex((n) => n.id === op.toBlockId);
     if (fromIndex === -1) {
-      throw new Error(`Node not found: ${fromNodeId}`);
+      throw new Error(`Block not found: ${op.fromBlockId}`);
     }
     if (toIndex === -1) {
-      throw new Error(`Node not found: ${toNodeId}`);
+      throw new Error(`Block not found: ${op.toBlockId}`);
     }
     const startIndex = Math.min(fromIndex, toIndex);
     const endIndex = Math.max(fromIndex, toIndex);
-    nodesToMove = nodes.slice(startIndex, endIndex + 1);
+    blocksToMove = nodes.slice(startIndex, endIndex + 1);
     remainingNodes = [
       ...nodes.slice(0, startIndex),
       ...nodes.slice(endIndex + 1)
     ];
   } else {
-    throw new Error("Move operation must specify nodeId, nodeIds, or fromNodeId/toNodeId");
+    throw new Error("Move operation must specify blockId, blockIds, or fromBlockId/toBlockId");
   }
   const insertOp = {
     type: "insert",
-    afterNodeId,
-    beforeNodeId,
+    afterBlockId: op.afterBlockId,
+    beforeBlockId: op.beforeBlockId,
     atStart: op.atStart,
     atEnd: op.atEnd,
-    nodes: nodesToMove
+    blocks: blocksToMove
   };
   return applyInsert(remainingNodes, insertOp);
 }
@@ -2462,343 +2424,6 @@ function findNodeById(nodes, id) {
     }
   }
   return null;
-}
-
-// document/blocknote-converter.ts
-function blockNoteToIdyllic(blockNoteBlocks) {
-  return blockNoteBlocks.map(convertBlockNoteBlock);
-}
-function idyllicToBlockNote(idyllicNodes) {
-  return idyllicNodes.map(convertIdyllicNode);
-}
-function convertBlockNoteBlock(bnBlock) {
-  const { id, type, props, content, children } = bnBlock;
-  if (type === "trigger") {
-    return {
-      id,
-      type: "trigger",
-      tool: props.trigger || "",
-      parameters: props.params ? JSON.parse(props.params) : {},
-      instructions: Array.isArray(content) ? convertBlockNoteContent(content) : [],
-      metadata: {
-        enabled: props.enabled,
-        modelId: props.modelId
-      }
-    };
-  }
-  if (type === "tool") {
-    return {
-      id,
-      type: "tool",
-      content: [],
-      // Tool description would go here
-      props: {
-        title: props.title,
-        icon: props.icon,
-        toolDefinition: props.toolDefinition
-      },
-      children: children.map(convertBlockNoteBlock)
-    };
-  }
-  if (type === "table") {
-    return {
-      id,
-      type: "data",
-      // Tables map to data nodes in Idyllic
-      content: [{ type: "text", text: JSON.stringify(content) }],
-      props: {
-        title: "Table",
-        originalType: "table",
-        ...props
-      },
-      children: []
-    };
-  }
-  if (type === "functionCall") {
-    return {
-      id,
-      type: "function_call",
-      tool: props.tool || "",
-      parameters: props.params ? JSON.parse(props.params) : {},
-      result: {
-        success: !props.error,
-        data: props.response || void 0,
-        error: props.error || void 0
-      },
-      instructions: Array.isArray(content) && content.length > 0 ? convertBlockNoteContent(content) : [],
-      metadata: {
-        modelId: props.modelId
-      }
-    };
-  }
-  const typeMapping = {
-    "paragraph": "paragraph",
-    "heading": "heading",
-    "bulletListItem": "bulletListItem",
-    "numberedListItem": "numberedListItem",
-    "checkListItem": "checklistItem",
-    "quote": "quote",
-    "codeBlock": "code",
-    "separator": "separator"
-  };
-  const idyllicType = typeMapping[type] || "paragraph";
-  const idyllicContent = Array.isArray(content) && content.length > 0 ? convertBlockNoteContent(content) : [{ type: "text", text: "" }];
-  const node = {
-    id,
-    type: idyllicType,
-    content: idyllicContent,
-    children: children.map(convertBlockNoteBlock)
-  };
-  if (Object.keys(props).length > 0) {
-    node.props = { ...props };
-  }
-  return node;
-}
-function convertBlockNoteContent(content) {
-  return content.map((item) => {
-    if (item.type === "text") {
-      const textContent = {
-        type: "text",
-        text: item.text || ""
-      };
-      if (item.styles && Object.keys(item.styles).length > 0) {
-        const styles = [];
-        if (item.styles.bold) styles.push("bold");
-        if (item.styles.italic) styles.push("italic");
-        if (item.styles.underline) styles.push("underline");
-        if (item.styles.strikethrough) styles.push("strikethrough");
-        if (item.styles.code) styles.push("code");
-        if (styles.length > 0) {
-          textContent.styles = styles;
-        }
-      }
-      return textContent;
-    }
-    if (item.type === "mention" && item.props) {
-      const mention = {
-        type: "mention",
-        mentionType: mapMentionType(item.props.mentionType),
-        id: item.props.id,
-        label: item.props.label
-      };
-      return mention;
-    }
-    if (item.type === "link" && item.props) {
-      const link = {
-        type: "link",
-        href: item.props.href || "",
-        content: item.props.content ? convertBlockNoteContent(item.props.content) : []
-      };
-      return link;
-    }
-    return {
-      type: "text",
-      text: JSON.stringify(item)
-    };
-  });
-}
-function mapMentionType(bnType) {
-  switch (bnType) {
-    case "user":
-      return "user";
-    case "document":
-      return "document";
-    case "agent":
-      return "agent";
-    case "tool":
-      return "custom";
-    // Tools are custom mentions in Idyllic
-    default:
-      return "custom";
-  }
-}
-function convertIdyllicNode(node) {
-  const { id } = node;
-  if (isExecutableNode(node)) {
-    if (node.type === "trigger") {
-      return {
-        id,
-        type: "trigger",
-        props: {
-          trigger: node.tool,
-          params: JSON.stringify(node.parameters),
-          enabled: node.metadata?.enabled ?? true,
-          modelId: node.metadata?.modelId
-        },
-        content: node.instructions && node.instructions.length > 0 ? convertIdyllicContent(node.instructions) : [{ type: "text", text: "", styles: {} }],
-        children: []
-      };
-    }
-    if (node.type === "function_call") {
-      return {
-        id,
-        type: "functionCall",
-        props: {
-          tool: node.tool,
-          params: JSON.stringify(node.parameters),
-          response: node.result?.data ? JSON.stringify(node.result.data) : "",
-          error: node.result?.error ? JSON.stringify(node.result.error) : "",
-          modelId: node.metadata?.modelId
-        },
-        content: node.instructions && node.instructions.length > 0 ? convertIdyllicContent(node.instructions) : [{ type: "text", text: "", styles: {} }],
-        children: []
-      };
-    }
-  }
-  const contentNode = node;
-  if (contentNode.type === "tool") {
-    return {
-      id,
-      type: "tool",
-      props: {
-        title: contentNode.props?.title || "Tool",
-        icon: contentNode.props?.icon || "\u{1F527}",
-        toolDefinition: contentNode.props?.toolDefinition || ""
-      },
-      content: [],
-      children: contentNode.children ? contentNode.children.map(convertIdyllicNode) : []
-    };
-  }
-  if (contentNode.type === "data" && contentNode.props?.originalType === "table") {
-    try {
-      const firstContent = contentNode.content[0];
-      const tableData = JSON.parse(
-        firstContent && firstContent.type === "text" ? firstContent.text : "{}"
-      );
-      return {
-        id,
-        type: "table",
-        props: { textColor: contentNode.props.textColor || "default" },
-        content: tableData,
-        children: []
-      };
-    } catch {
-    }
-  }
-  const typeMapping = {
-    "paragraph": "paragraph",
-    "heading": "heading",
-    "bulletListItem": "bulletListItem",
-    "numberedListItem": "numberedListItem",
-    "checklistItem": "checkListItem",
-    "quote": "quote",
-    "code": "codeBlock",
-    "separator": "separator",
-    "data": "paragraph"
-    // Generic data nodes become paragraphs
-  };
-  const bnType = typeMapping[contentNode.type] || "paragraph";
-  const bnProps = {};
-  if (bnType !== "separator" && bnType !== "codeBlock") {
-    bnProps.textColor = contentNode.props?.textColor || "default";
-    bnProps.textAlignment = contentNode.props?.textAlignment || "left";
-    bnProps.backgroundColor = contentNode.props?.backgroundColor || "default";
-  }
-  if (contentNode.type === "heading") {
-    bnProps.level = contentNode.props?.level || 1;
-  } else if (contentNode.type === "checklistItem") {
-    bnProps.checked = contentNode.props?.checked || false;
-  } else if (contentNode.type === "code") {
-    bnProps.language = contentNode.props?.language || "text";
-  } else if (contentNode.type === "separator") {
-    bnProps.text = contentNode.props?.text || "";
-  }
-  if (contentNode.props) {
-    Object.keys(contentNode.props).forEach((key) => {
-      if (!bnProps[key]) {
-        bnProps[key] = contentNode.props[key];
-      }
-    });
-  }
-  const bnContent = convertIdyllicContent(contentNode.content);
-  const finalContent = bnContent.length > 0 ? bnContent : [{ type: "text", text: "", styles: {} }];
-  return {
-    id,
-    type: bnType,
-    props: bnProps,
-    content: finalContent,
-    children: contentNode.children ? contentNode.children.map(convertIdyllicNode) : []
-  };
-}
-function convertIdyllicContent(content) {
-  return content.map((item) => {
-    if (item.type === "text") {
-      const bnContent = {
-        type: "text",
-        text: item.text,
-        styles: {}
-      };
-      if (item.styles) {
-        item.styles.forEach((style) => {
-          bnContent.styles[style] = true;
-        });
-      }
-      return bnContent;
-    }
-    if (item.type === "mention") {
-      return {
-        type: "mention",
-        props: {
-          id: item.id,
-          label: item.label || "",
-          iconUrl: "",
-          mentionId: generateMentionId(),
-          parameters: "",
-          mentionType: item.mentionType === "custom" ? "tool" : item.mentionType
-        }
-      };
-    }
-    if (item.type === "link") {
-      return {
-        type: "link",
-        props: {
-          href: item.href,
-          content: convertIdyllicContent(item.content)
-        }
-      };
-    }
-    if (item.type === "variable") {
-      return {
-        type: "mention",
-        props: {
-          id: `var:${item.name}`,
-          label: item.name,
-          iconUrl: "",
-          mentionId: generateMentionId(),
-          parameters: "",
-          mentionType: "custom"
-        }
-      };
-    }
-    if (item.type === "annotation") {
-      const annotatedContent = convertIdyllicContent(item.content);
-      return {
-        type: "text",
-        text: annotatedContent.map((c) => c.text).join(""),
-        styles: { backgroundColor: "yellow" }
-      };
-    }
-    return {
-      type: "text",
-      text: `[${item.type || "unknown"}]`,
-      styles: {}
-    };
-  });
-}
-function generateMentionId() {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-}
-function testIsomorphism(original) {
-  const idyllic = blockNoteToIdyllic(original);
-  const roundTripped = idyllicToBlockNote(idyllic);
-  const differences = [];
-  if (original.length !== roundTripped.length) {
-    differences.push(`Block count mismatch: ${original.length} vs ${roundTripped.length}`);
-  }
-  return {
-    isIsomorphic: differences.length === 0,
-    differences
-  };
 }
 
 // agent/agent.ts
@@ -3393,7 +3018,6 @@ export {
   GrammarCompiler,
   applyDiff,
   applyResolvedVariables,
-  blockNoteToIdyllic,
   buildDetailedSystemPrompt,
   buildSystemPrompt,
   buildToolName,
@@ -3406,17 +3030,12 @@ export {
   extractRelevantResult,
   extractVariableDefinitions,
   extractVariables,
-  findBlock,
   findNode,
   formatValidationIssues,
   fromAzureFunctionName,
-  getExecutableBlocks,
   getExecutableNodes,
-  idyllicToBlockNote,
   interpolateContent,
-  isContentBlock,
   isContentNode,
-  isExecutableBlock,
   isExecutableNode,
   isMention,
   isTextContent,
@@ -3424,14 +3043,10 @@ export {
   mergeToolRegistries,
   parseCustomTool,
   parseToolName,
-  parseXML,
   parseXmlToAst,
   resolveVariables,
   serializeAstToXml,
-  serializeToXML,
-  testIsomorphism,
   toAzureFunctionName,
-  traverseBlocks,
   traverseNodes,
   validateDocument,
   validateToolName
