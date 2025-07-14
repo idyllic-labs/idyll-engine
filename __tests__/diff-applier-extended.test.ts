@@ -4,8 +4,8 @@
  */
 
 import { applyDiff } from '../document/diff-applier';
-import type { Block, EditOperation, ContentBlock, ExecutableBlock } from '../document/ast';
-import { isContentBlock, isExecutableBlock } from '../document/ast';
+import type { Node, EditOperation, ContentNode, ExecutableNode } from '../document/ast';
+import { isContentNode, isExecutableNode } from '../document/ast';
 
 console.log('🧪 Extended Diff Implementation Tests\n');
 

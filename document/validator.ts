@@ -3,12 +3,12 @@
  */
 
 import {
-  Block,
+  Node,
   IdyllDocument,
-  isExecutableBlock,
+  isExecutableNode,
   extractMentions,
   extractVariables,
-  traverseBlocks,
+  traverseNodes,
 } from './ast';
 import { ValidationContext, ValidationError } from '../types';
 
@@ -26,7 +26,7 @@ export interface ValidationIssue {
   type: 'error' | 'warning';
   code: string;
   message: string;
-  blockId?: string;
+  nodeId?: string;
   path?: string[];
 }
 
@@ -80,82 +80,82 @@ function validateStructure(
     });
   }
   
-  // Validate document has blocks
-  if (!document.blocks || document.blocks.length === 0) {
+  // Validate document has nodes
+  if (!document.nodes || document.nodes.length === 0) {
     warnings.push({
       type: 'warning',
       code: 'EMPTY_DOCUMENT',
-      message: 'Document has no content blocks',
+      message: 'Document has no content nodes',
     });
   }
   
-  // Validate each block
-  const blockIds = new Set<string>();
-  for (const block of traverseBlocks(document.blocks)) {
-    validateBlock(block, blockIds, errors, warnings);
+  // Validate each node
+  const nodeIds = new Set<string>();
+  for (const node of traverseNodes(document.nodes)) {
+    validateNode(node, nodeIds, errors, warnings);
   }
 }
 
 /**
- * Validate a single block
+ * Validate a single node
  */
-function validateBlock(
-  block: Block,
-  blockIds: Set<string>,
+function validateNode(
+  node: Node,
+  nodeIds: Set<string>,
   errors: ValidationIssue[],
   warnings: ValidationIssue[]
 ): void {
-  const blockId = block.id || 'unknown';
+  const nodeId = node.id || 'unknown';
   
   // Check for duplicate IDs
-  if (block.id && blockIds.has(block.id)) {
+  if (node.id && nodeIds.has(node.id)) {
     errors.push({
       type: 'error',
-      code: 'DUPLICATE_BLOCK_ID',
-      message: `Duplicate block ID: ${block.id}`,
-      blockId: block.id,
+      code: 'DUPLICATE_NODE_ID',
+      message: `Duplicate node ID: ${node.id}`,
+      nodeId: node.id,
     });
   }
-  if (block.id) {
-    blockIds.add(block.id);
+  if (node.id) {
+    nodeIds.add(node.id);
   }
   
-  // Validate block has required fields
-  if (!block.id) {
+  // Validate node has required fields
+  if (!node.id) {
     errors.push({
       type: 'error',
-      code: 'MISSING_BLOCK_ID',
-      message: 'Block must have an ID',
+      code: 'MISSING_NODE_ID',
+      message: 'Node must have an ID',
     });
   }
   
-  if (!block.type) {
+  if (!node.type) {
     errors.push({
       type: 'error',
-      code: 'MISSING_BLOCK_TYPE',
-      message: 'Block must have a type',
-      blockId,
+      code: 'MISSING_NODE_TYPE',
+      message: 'Node must have a type',
+      nodeId,
     });
     return; // Can't validate further without type
   }
   
-  // Validate executable blocks
-  if (isExecutableBlock(block)) {
-    if (!block.tool) {
+  // Validate executable nodes
+  if (isExecutableNode(node)) {
+    if (!node.tool) {
       errors.push({
         type: 'error',
         code: 'MISSING_TOOL',
-        message: 'Executable block must specify a tool',
-        blockId,
+        message: 'Executable node must specify a tool',
+        nodeId,
       });
     }
     
-    if (!block.parameters) {
+    if (!node.parameters) {
       warnings.push({
         type: 'warning',
         code: 'MISSING_PARAMETERS',
-        message: 'Executable block has no parameters',
-        blockId,
+        message: 'Executable node has no parameters',
+        nodeId,
       });
     }
   }
@@ -176,7 +176,7 @@ async function validateReferences(
 ): Promise<void> {
   // Validate mentions
   if (context.validateMention) {
-    const mentions = extractMentions(document.blocks);
+    const mentions = extractMentions(document.nodes);
     for (const mention of mentions) {
       if (!context.validateMention(mention)) {
         errors.push({
@@ -190,7 +190,7 @@ async function validateReferences(
   
   // Validate variables
   if (context.validateVariable) {
-    const variables = extractVariables(document.blocks);
+    const variables = extractVariables(document.nodes);
     for (const variable of variables) {
       const result = context.validateVariable(variable);
       if (!result.valid) {
@@ -205,14 +205,14 @@ async function validateReferences(
   
   // Validate tools
   if (context.validateTool) {
-    for (const block of traverseBlocks(document.blocks)) {
-      if (isExecutableBlock(block) && block.tool) {
-        if (!context.validateTool(block.tool)) {
+    for (const node of traverseNodes(document.nodes)) {
+      if (isExecutableNode(node) && node.tool) {
+        if (!context.validateTool(node.tool)) {
           errors.push({
             type: 'error',
             code: 'INVALID_TOOL',
-            message: `Tool not found: ${block.tool}`,
-            blockId: block.id || 'unknown',
+            message: `Tool not found: ${node.tool}`,
+            nodeId: node.id || 'unknown',
           });
         }
       }
@@ -243,7 +243,7 @@ export function formatValidationIssues(issues: ValidationIssue[]): string {
   return issues
     .map(issue => {
       const prefix = issue.type === 'error' ? '❌' : '⚠️';
-      const location = issue.blockId ? ` (block: ${issue.blockId})` : '';
+      const location = issue.nodeId ? ` (node: ${issue.nodeId})` : '';
       return `${prefix} ${issue.message}${location}`;
     })
     .join('\n');

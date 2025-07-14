@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { parseXML, serializeToXML } from '../document/parser-grammar';
+import { parseXmlToAst, serializeAstToXml } from '../document/parser-grammar';
 import {
   extractVariableDefinitions,
   checkVariableRedeclaration,
@@ -17,11 +17,11 @@ describe('Variable Resolution', () => {
         </document>
       `;
       
-      const doc = parseXML(xml);
-      expect('blocks' in doc).toBe(true);
+      const doc = parseXmlToAst(xml);
+      expect('nodes' in doc).toBe(true);
       
       if ('blocks' in doc) {
-        const variables = extractVariableDefinitions(doc.blocks);
+        const variables = extractVariableDefinitions(doc.nodes);
         expect(variables).toHaveLength(1);
         expect(variables[0].name).toBe('topic');
         expect(variables[0].prompt).toBe('What to search for');
@@ -35,9 +35,9 @@ describe('Variable Resolution', () => {
         </document>
       `;
       
-      const doc = parseXML(xml);
+      const doc = parseXmlToAst(xml);
       if ('blocks' in doc) {
-        const variables = extractVariableDefinitions(doc.blocks);
+        const variables = extractVariableDefinitions(doc.nodes);
         expect(variables).toHaveLength(2);
         expect(variables.map(v => v.name)).toEqual(['topic', 'timeframe']);
       }
@@ -52,9 +52,9 @@ describe('Variable Resolution', () => {
         </document>
       `;
       
-      const doc = parseXML(xml);
+      const doc = parseXmlToAst(xml);
       if ('blocks' in doc) {
-        const variables = extractVariableDefinitions(doc.blocks);
+        const variables = extractVariableDefinitions(doc.nodes);
         expect(variables).toHaveLength(1);
         expect(variables[0].prompt).toBe('Main topic');
       }
@@ -70,9 +70,9 @@ describe('Variable Resolution', () => {
         </document>
       `;
       
-      const doc = parseXML(xml);
+      const doc = parseXmlToAst(xml);
       if ('blocks' in doc) {
-        const errors = checkVariableRedeclaration(doc.blocks);
+        const errors = checkVariableRedeclaration(doc.nodes);
         expect(errors).toHaveLength(1);
         expect(errors[0].name).toBe('topic');
         expect(errors[0].error).toContain('redeclared with different prompt');
@@ -87,9 +87,9 @@ describe('Variable Resolution', () => {
         </document>
       `;
       
-      const doc = parseXML(xml);
+      const doc = parseXmlToAst(xml);
       if ('blocks' in doc) {
-        const errors = checkVariableRedeclaration(doc.blocks);
+        const errors = checkVariableRedeclaration(doc.nodes);
         expect(errors).toHaveLength(0);
       }
     });
@@ -120,10 +120,10 @@ describe('Variable Resolution', () => {
         </document>
       `;
       
-      const doc = parseXML(xml);
+      const doc = parseXmlToAst(xml);
       if ('blocks' in doc) {
         const resolved = new Map([['topic', 'AI breakthroughs']]);
-        const applied = applyResolvedVariables(doc.blocks, resolved);
+        const applied = applyResolvedVariables(doc.nodes, resolved);
         
         // Check that the variable has resolvedValue
         const block = applied[0];
@@ -174,11 +174,11 @@ describe('Variable Resolution', () => {
   <p>Search for <variable name="topic" prompt="What to search" /> in <variable name="location" /></p>
 </document>`;
       
-      const doc = parseXML(originalXml);
-      expect('blocks' in doc).toBe(true);
+      const doc = parseXmlToAst(originalXml);
+      expect('nodes' in doc).toBe(true);
       console.log('Parsed doc:', JSON.stringify(doc, null, 2));
       
-      const serialized = serializeToXML(doc);
+      const serialized = serializeAstToXml(doc);
       console.log('Full serialized output:', serialized);
       
       // The serialized output includes XML declaration, so we need to parse it
@@ -188,9 +188,9 @@ describe('Variable Resolution', () => {
       expect(serialized).toContain('<variable name="location"');
       
       // Parse again to verify
-      const doc2 = parseXML(serialized);
+      const doc2 = parseXmlToAst(serialized);
       if ('blocks' in doc2) {
-        const variables = extractVariableDefinitions(doc2.blocks);
+        const variables = extractVariableDefinitions(doc2.nodes);
         expect(variables).toHaveLength(2);
         expect(variables[0].name).toBe('topic');
         expect(variables[0].prompt).toBe('What to search');

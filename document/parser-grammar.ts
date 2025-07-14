@@ -12,8 +12,11 @@ import {
   AgentDocument,
   DiffDocument,
   EditOperation,
+  Node,
   Block,
+  ContentNode,
   ContentBlock,
+  ExecutableNode,
   ExecutableBlock,
   RichContent,
   TextContent,
@@ -23,7 +26,7 @@ import {
   LinkElement,
   AnnotationElement,
   ContentBlockType,
-  isExecutableBlock,
+  isExecutableNode,
   isTextContent,
 } from "./ast";
 import { ParseError } from "../types";
@@ -108,22 +111,22 @@ function parseDocument(documentElement: xml2js.Element): IdyllDocument {
 
   const documentId = (attrs.id as string) || uuidv4();
 
-  // Parse blocks
-  const blocks: Block[] = [];
+  // Parse nodes
+  const nodes: Node[] = [];
   const childElements = documentElement.elements || [];
 
   for (const element of childElements) {
     if (element.type === "element" && element.name) {
-      const block = parseBlock(element);
-      if (block) {
-        blocks.push(block);
+      const node = parseNode(element);
+      if (node) {
+        nodes.push(node);
       }
     }
   }
 
   return {
     id: documentId,
-    blocks: blocks.length > 0 ? blocks : [createEmptyParagraph()],
+    nodes: nodes.length > 0 ? nodes : [createEmptyParagraph()],
     metadata: extractMetadata(attrs),
   };
 }
@@ -142,15 +145,15 @@ function parseAgent(agentElement: xml2js.Element): AgentDocument {
 
   const agentId = (attrs.id as string) || uuidv4();
 
-  // Parse blocks (same as document)
-  const blocks: Block[] = [];
+  // Parse nodes (same as document)
+  const nodes: Node[] = [];
   const childElements = agentElement.elements || [];
 
   for (const element of childElements) {
     if (element.type === "element" && element.name) {
-      const block = parseBlock(element);
-      if (block) {
-        blocks.push(block);
+      const node = parseNode(element);
+      if (node) {
+        nodes.push(node);
       }
     }
   }
@@ -161,7 +164,7 @@ function parseAgent(agentElement: xml2js.Element): AgentDocument {
     name: attrs.name as string,
     description: attrs.description as string,
     model: attrs.model as string,
-    blocks,
+    nodes,
   };
 }
 
@@ -225,12 +228,12 @@ function parseEditOperation(element: xml2js.Element): EditOperation | null {
       };
 
     case "insert":
-      const insertBlocks: Block[] = [];
+      const insertNodes: Node[] = [];
       for (const child of element.elements || []) {
         if (child.type === "element" && child.name) {
-          const block = parseBlock(child);
-          if (block) {
-            insertBlocks.push(block);
+          const node = parseNode(child);
+          if (node) {
+            insertNodes.push(node);
           }
         }
       }
@@ -240,7 +243,7 @@ function parseEditOperation(element: xml2js.Element): EditOperation | null {
         beforeBlockId: attrs["before-block-id"] as string,
         atStart: attrs["at-start"] === "true",
         atEnd: attrs["at-end"] === "true",
-        blocks: insertBlocks,
+        blocks: insertNodes,
       };
 
     case "delete":
@@ -250,19 +253,19 @@ function parseEditOperation(element: xml2js.Element): EditOperation | null {
       };
 
     case "replace":
-      const replaceBlocks: Block[] = [];
+      const replaceNodes: Node[] = [];
       for (const child of element.elements || []) {
         if (child.type === "element" && child.name) {
-          const block = parseBlock(child);
-          if (block) {
-            replaceBlocks.push(block);
+          const node = parseNode(child);
+          if (node) {
+            replaceNodes.push(node);
           }
         }
       }
       return {
         type: "replace",
         blockId: attrs["block-id"] as string,
-        blocks: replaceBlocks,
+        blocks: replaceNodes,
       };
 
     default:
@@ -272,9 +275,9 @@ function parseEditOperation(element: xml2js.Element): EditOperation | null {
 }
 
 /**
- * Parse a block element using grammar rules
+ * Parse a node element using grammar rules
  */
-function parseBlock(element: xml2js.Element): Block | null {
+function parseNode(element: xml2js.Element): Node | null {
   if (!element.name) return null;
 
   const elementType = compiled.elementToType[element.name];
@@ -302,7 +305,7 @@ function parseBlock(element: xml2js.Element): Block | null {
     case "tool":
       return parseTool(element, id, attrs);
     default:
-      return parseContentBlock(element, id, attrs, elementType);
+      return parseContentNode(element, id, attrs, elementType);
   }
 }
 
@@ -442,9 +445,9 @@ function parseTool(
                 throw new ParseError("Tools cannot contain other tools");
               }
 
-              const block = parseBlock(defChild);
-              if (block) {
-                definition.push(block);
+              const node = parseNode(defChild);
+              if (node) {
+                definition.push(node);
               }
             }
           }
@@ -465,7 +468,7 @@ function parseTool(
 /**
  * Parse content block
  */
-function parseContentBlock(
+function parseContentNode(
   element: xml2js.Element,
   id: string,
   attrs: Record<string, unknown>,
@@ -479,9 +482,9 @@ function parseContentBlock(
     if (child.type === "element" && child.name) {
       const childType = compiled.elementToType[child.name];
       if (childType && compiled.blockTypes.has(childType)) {
-        const childBlock = parseBlock(child);
-        if (childBlock) {
-          children.push(childBlock);
+        const childNode = parseNode(child);
+        if (childNode) {
+          children.push(childNode);
         }
       }
     }
@@ -696,7 +699,7 @@ function serializeIdyllDocument(document: IdyllDocument): xml2js.Element {
       id: document.id,
       ...serializeMetadata(document.metadata),
     },
-    elements: document.blocks.map(serializeBlock),
+    elements: document.nodes.map(serializeNode),
   };
 }
 
@@ -713,7 +716,7 @@ function serializeAgentDocument(document: AgentDocument): xml2js.Element {
       ...(document.description && { description: document.description }),
       ...(document.model && { model: document.model }),
     },
-    elements: document.blocks.map(serializeBlock),
+    elements: document.nodes.map(serializeNode),
   };
 }
 
@@ -737,58 +740,58 @@ function serializeDiffDocument(document: DiffDocument): xml2js.Element {
 /**
  * Serialize a block to XML element
  */
-function serializeBlock(block: Block): xml2js.Element {
-  if (isExecutableBlock(block)) {
-    return serializeExecutableBlock(block);
+function serializeNode(node: Node): xml2js.Element {
+  if (isExecutableNode(node)) {
+    return serializeExecutableNode(node);
   }
 
-  // Special handling for tool blocks
-  if (block.type === "tool") {
-    return serializeToolBlock(block);
+  // Special handling for tool nodes
+  if (node.type === "tool") {
+    return serializeToolNode(node);
   }
 
-  return serializeContentBlock(block);
+  return serializeContentNode(node);
 }
 
 /**
  * Serialize executable block
  */
-function serializeExecutableBlock(block: ExecutableBlock): xml2js.Element {
+function serializeExecutableNode(node: ExecutableNode): xml2js.Element {
   const elements: xml2js.Element[] = [];
 
   // Add params
-  if (Object.keys(block.parameters).length > 0) {
+  if (Object.keys(node.parameters).length > 0) {
     elements.push({
       type: "element",
       name: "params",
       elements: [
         {
           type: "cdata",
-          cdata: JSON.stringify(block.parameters),
+          cdata: JSON.stringify(node.parameters),
         },
       ],
     });
   }
 
   // Add content
-  if (block.instructions && block.instructions.length > 0) {
+  if (node.instructions && node.instructions.length > 0) {
     elements.push({
       type: "element",
       name: "content",
-      elements: serializeRichContent(block.instructions),
+      elements: serializeRichContent(node.instructions),
     });
   }
 
-  if (block.type === "function_call") {
+  if (node.type === "function_call") {
     // Add result
-    if (block.result) {
+    if (node.result) {
       elements.push({
         type: "element",
         name: "result",
         elements: [
           {
             type: "cdata",
-            cdata: JSON.stringify(block.result.data || block.result),
+            cdata: JSON.stringify(node.result.data || node.result),
           },
         ],
       });
@@ -798,9 +801,9 @@ function serializeExecutableBlock(block: ExecutableBlock): xml2js.Element {
       type: "element",
       name: "fncall",
       attributes: {
-        id: block.id,
-        "idyll-tool": block.tool,
-        ...(block.metadata?.modelId && { modelId: block.metadata.modelId }),
+        id: node.id,
+        "idyll-tool": node.tool,
+        ...(node.metadata?.modelId && { modelId: node.metadata.modelId }),
       },
       elements,
     };
@@ -809,9 +812,9 @@ function serializeExecutableBlock(block: ExecutableBlock): xml2js.Element {
       type: "element",
       name: "trigger",
       attributes: {
-        id: block.id,
-        "idyll-trigger": block.tool,
-        enabled: String(block.metadata?.enabled !== false),
+        id: node.id,
+        "idyll-trigger": node.tool,
+        enabled: String(node.metadata?.enabled !== false),
       },
       elements,
     };
@@ -821,11 +824,11 @@ function serializeExecutableBlock(block: ExecutableBlock): xml2js.Element {
 /**
  * Serialize tool block
  */
-function serializeToolBlock(block: ContentBlock): xml2js.Element {
+function serializeToolNode(node: ContentNode): xml2js.Element {
   const elements: xml2js.Element[] = [];
 
   // Add description
-  const description = block.content
+  const description = node.content
     .map((c) => (isTextContent(c) ? c.text : ""))
     .join("");
 
@@ -836,21 +839,21 @@ function serializeToolBlock(block: ContentBlock): xml2js.Element {
   });
 
   // Add definition
-  if (block.children && block.children.length > 0) {
+  if (node.children && node.children.length > 0) {
     elements.push({
       type: "element",
       name: "tool:definition",
-      elements: block.children.map(serializeBlock),
+      elements: node.children.map(serializeNode),
     });
   }
 
   const attributes: Record<string, string> = {
-    id: block.id,
-    title: block.props?.title as string,
+    id: node.id,
+    title: node.props?.title as string,
   };
 
-  if (block.props?.icon) {
-    attributes.icon = block.props.icon as string;
+  if (node.props?.icon) {
+    attributes.icon = node.props.icon as string;
   }
 
   return {
@@ -864,10 +867,10 @@ function serializeToolBlock(block: ContentBlock): xml2js.Element {
 /**
  * Serialize content block
  */
-function serializeContentBlock(block: ContentBlock): xml2js.Element {
+function serializeContentNode(node: ContentNode): xml2js.Element {
   const elements = [
-    ...serializeRichContent(block.content),
-    ...(block.children || []).map(serializeBlock),
+    ...serializeRichContent(node.content),
+    ...(node.children || []).map(serializeNode),
   ];
 
   // Get element name from type
@@ -880,19 +883,19 @@ function serializeContentBlock(block: ContentBlock): xml2js.Element {
     {} as Record<string, string[]>
   );
 
-  let elementName = typeToElement[block.type]?.[0] || "p";
+  let elementName = typeToElement[node.type]?.[0] || "p";
 
   // Special handling for headings
-  if (block.type === "heading" && block.props?.level) {
-    elementName = `h${block.props.level}`;
+  if (node.type === "heading" && node.props?.level) {
+    elementName = `h${node.props.level}`;
   }
 
   return {
     type: "element",
     name: elementName,
     attributes: {
-      id: block.id,
-      ...block.props,
+      id: node.id,
+      ...node.props,
     },
     elements: elements.length > 0 ? elements : undefined,
   };
@@ -1011,7 +1014,7 @@ function extractTextContent(element: xml2js.Element): string {
   return text;
 }
 
-function createEmptyParagraph(): ContentBlock {
+function createEmptyParagraph(): ContentNode {
   return {
     id: uuidv4(),
     type: "paragraph",
@@ -1087,7 +1090,7 @@ function serializeEditOperation(operation: EditOperation): xml2js.Element {
           ...(operation.atStart && { "at-start": "true" }),
           ...(operation.atEnd && { "at-end": "true" }),
         },
-        elements: operation.blocks.map(serializeBlock),
+        elements: operation.blocks.map(serializeNode),
       };
 
     case "delete":
@@ -1106,7 +1109,7 @@ function serializeEditOperation(operation: EditOperation): xml2js.Element {
         attributes: {
           "block-id": operation.blockId,
         },
-        elements: operation.blocks.map(serializeBlock),
+        elements: operation.blocks.map(serializeNode),
       };
 
     default:
@@ -1114,16 +1117,3 @@ function serializeEditOperation(operation: EditOperation): xml2js.Element {
   }
 }
 
-// ============================================
-// Backward Compatibility Exports
-// ============================================
-
-/**
- * @deprecated Use parseXmlToAst instead for clarity
- */
-export const parseXML = parseXmlToAst;
-
-/**
- * @deprecated Use serializeAstToXml instead for clarity  
- */
-export const serializeToXML = serializeAstToXml;

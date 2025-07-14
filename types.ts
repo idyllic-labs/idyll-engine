@@ -225,7 +225,7 @@ export interface ToolExecutionContext {
    */
   document?: {
     id: string;
-    blockId: string;
+    nodeId: string;
   };
   
   /**
@@ -350,7 +350,7 @@ export class ToolExecutionError extends IdyllEngineError {
   constructor(
     message: string,
     public toolName: string,
-    public blockId?: string,
+    public nodeId?: string,
     details?: unknown
   ) {
     super(message, 'TOOL_EXECUTION_ERROR', details);

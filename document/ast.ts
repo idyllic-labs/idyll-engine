@@ -16,9 +16,10 @@
  */
 export interface IdyllDocument {
   id: string;
-  blocks: Block[];
+  nodes: Node[];
   metadata?: DocumentMetadata;
 }
+
 
 /**
  * Agent system prompt document
@@ -29,7 +30,7 @@ export interface AgentDocument {
   name?: string;
   description?: string;
   model?: string;
-  blocks: Block[];
+  nodes: Node[];
 }
 
 /**
@@ -86,7 +87,7 @@ export interface InsertOperation {
   beforeBlockId?: string;
   atStart?: boolean;
   atEnd?: boolean;
-  blocks: Block[];
+  blocks: Node[];
 }
 
 export interface DeleteOperation {
@@ -97,7 +98,7 @@ export interface DeleteOperation {
 export interface ReplaceOperation {
   type: 'replace';
   blockId: string;
-  blocks: Block[];
+  blocks: Node[];
 }
 
 export interface MoveOperation {
@@ -120,24 +121,25 @@ export interface DocumentMetadata {
 }
 
 /**
- * A block can be either content (text, headings, etc) or executable
+ * A node can be either content (text, headings, etc) or executable
  */
-export type Block = ContentBlock | ExecutableBlock;
+export type Node = ContentNode | ExecutableNode;
+
 
 // ============================================
-// Content Blocks
+// Content Nodes
 // ============================================
 
-export interface ContentBlock {
+export interface ContentNode {
   id: string;
-  type: ContentBlockType;
+  type: ContentNodeType;
   content: RichContent[];
-  children?: Block[];
+  children?: Node[];
   props?: Record<string, unknown>;
 }
 
-// Define block types directly
-export type BlockType = 
+// Define node types directly
+export type NodeType = 
   | 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
   | 'ul' | 'ol' | 'li'
   | 'blockquote' | 'code' | 'pre'
@@ -145,19 +147,19 @@ export type BlockType =
   | 'function_call' | 'trigger' | '_params' | '_content' | '_result'
   | 'heading' | 'paragraph';  // Added for compatibility
 
-// ContentBlockType includes all content-related types
-export type ContentBlockType = 
+// ContentNodeType includes all content-related types
+export type ContentNodeType = 
   | 'paragraph' | 'heading'
   | 'bulletListItem' | 'numberedListItem' | 'checklistItem'
   | 'code' | 'quote' | 'separator' | 'data' | 'tool';
 
 // ============================================
-// Executable Blocks
+// Executable Nodes
 // ============================================
 
-export interface ExecutableBlock {
+export interface ExecutableNode {
   id: string;
-  type: ExecutableBlockType;
+  type: ExecutableNodeType;
   tool: string; // e.g., "documents:create", "ai:generate-text"
   parameters: Record<string, unknown>;
   instructions?: RichContent[]; // Natural language instructions
@@ -166,7 +168,8 @@ export interface ExecutableBlock {
   props?: Record<string, unknown>; // Additional properties for compatibility
 }
 
-export type ExecutableBlockType = 'function_call' | 'trigger';
+export type ExecutableNodeType = 'function_call' | 'trigger';
+
 
 export interface ExecutableMetadata {
   enabled?: boolean; // For triggers
@@ -253,13 +256,15 @@ export interface AnnotationElement {
 /**
  * Type guards for runtime type checking
  */
-export function isContentBlock(block: Block): block is ContentBlock {
-  return !isExecutableBlock(block);
+export function isContentNode(node: Node): node is ContentNode {
+  return !isExecutableNode(node);
 }
 
-export function isExecutableBlock(block: Block): block is ExecutableBlock {
-  return block.type === 'function_call' || block.type === 'trigger';
+
+export function isExecutableNode(node: Node): node is ExecutableNode {
+  return node.type === 'function_call' || node.type === 'trigger';
 }
+
 
 export function isTextContent(content: RichContent): content is TextContent {
   return content.type === 'text';
@@ -278,46 +283,49 @@ export function isVariable(content: RichContent): content is VariableElement {
 // ============================================
 
 /**
- * Traverse all blocks in a document (including nested children)
+ * Traverse all nodes in a document (including nested children)
  */
-export function* traverseBlocks(blocks: Block[]): Generator<Block> {
-  for (const block of blocks) {
-    yield block;
-    if ('children' in block && block.children) {
-      yield* traverseBlocks(block.children);
+export function* traverseNodes(nodes: Node[]): Generator<Node> {
+  for (const node of nodes) {
+    yield node;
+    if ('children' in node && node.children) {
+      yield* traverseNodes(node.children);
     }
   }
 }
 
+
 /**
- * Find a block by ID
+ * Find a node by ID
  */
-export function findBlock(blocks: Block[], id: string): Block | undefined {
-  for (const block of traverseBlocks(blocks)) {
-    if (block.id === id) {
-      return block;
+export function findNode(nodes: Node[], id: string): Node | undefined {
+  for (const node of traverseNodes(nodes)) {
+    if (node.id === id) {
+      return node;
     }
   }
   return undefined;
 }
 
+
 /**
- * Get all executable blocks
+ * Get all executable nodes
  */
-export function getExecutableBlocks(blocks: Block[]): ExecutableBlock[] {
-  const executable: ExecutableBlock[] = [];
-  for (const block of traverseBlocks(blocks)) {
-    if (isExecutableBlock(block)) {
-      executable.push(block);
+export function getExecutableNodes(nodes: Node[]): ExecutableNode[] {
+  const executable: ExecutableNode[] = [];
+  for (const node of traverseNodes(nodes)) {
+    if (isExecutableNode(node)) {
+      executable.push(node);
     }
   }
   return executable;
 }
 
+
 /**
  * Extract all mentions from a document
  */
-export function extractMentions(blocks: Block[]): MentionElement[] {
+export function extractMentions(nodes: Node[]): MentionElement[] {
   const mentions: MentionElement[] = [];
   
   function extractFromContent(content: RichContent[]) {
@@ -330,12 +338,12 @@ export function extractMentions(blocks: Block[]): MentionElement[] {
     }
   }
   
-  for (const block of traverseBlocks(blocks)) {
-    if ('content' in block && Array.isArray(block.content)) {
-      extractFromContent(block.content);
+  for (const node of traverseNodes(nodes)) {
+    if ('content' in node && Array.isArray(node.content)) {
+      extractFromContent(node.content);
     }
-    if (isExecutableBlock(block) && block.instructions) {
-      extractFromContent(block.instructions);
+    if (isExecutableNode(node) && node.instructions) {
+      extractFromContent(node.instructions);
     }
   }
   
@@ -345,7 +353,7 @@ export function extractMentions(blocks: Block[]): MentionElement[] {
 /**
  * Extract all variables from a document
  */
-export function extractVariables(blocks: Block[]): VariableElement[] {
+export function extractVariables(nodes: Node[]): VariableElement[] {
   const variables: VariableElement[] = [];
   
   function extractFromContent(content: RichContent[]) {
@@ -358,12 +366,12 @@ export function extractVariables(blocks: Block[]): VariableElement[] {
     }
   }
   
-  for (const block of traverseBlocks(blocks)) {
-    if ('content' in block && Array.isArray(block.content)) {
-      extractFromContent(block.content);
+  for (const node of traverseNodes(nodes)) {
+    if ('content' in node && Array.isArray(node.content)) {
+      extractFromContent(node.content);
     }
-    if (isExecutableBlock(block) && block.instructions) {
-      extractFromContent(block.instructions);
+    if (isExecutableNode(node) && node.instructions) {
+      extractFromContent(node.instructions);
     }
   }
   

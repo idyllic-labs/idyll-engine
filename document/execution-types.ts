@@ -6,39 +6,45 @@
  */
 
 import { z } from 'zod';
-import type { IdyllDocument, Block, ExecutableBlock } from './ast';
+import type { IdyllDocument, Node, Block, ExecutableNode, ExecutableBlock } from './ast';
 
 // ============================================
 // Execution Results
 // ============================================
 
-export interface BlockExecutionResult {
+export interface NodeExecutionResult {
   success: boolean;
   data?: unknown;
-  error?: BlockExecutionError;
+  error?: NodeExecutionError;
   duration: number;
   timestamp: Date;
 }
 
-export interface BlockExecutionError {
+// Backward compatibility
+export type BlockExecutionResult = NodeExecutionResult;
+
+export interface NodeExecutionError {
   message: string;
   code?: string;
   details?: unknown;
 }
+
+// Backward compatibility
+export type BlockExecutionError = NodeExecutionError;
 
 // ============================================
 // Execution State
 // ============================================
 
 /**
- * Execution state maintains results as blocks are executed.
+ * Execution state maintains results as nodes are executed.
  * Using Map to preserve insertion order.
  */
-export type ExecutionState = Map<string, BlockExecutionResult>;
+export type ExecutionState = Map<string, NodeExecutionResult>;
 
 export interface ExecutionReport {
-  /** Ordered map of block IDs to their execution results */
-  blocks: ExecutionState;
+  /** Ordered map of node IDs to their execution results */
+  nodes: ExecutionState;
   
   /** Overall execution metadata */
   metadata: ExecutionMetadata;
@@ -48,9 +54,9 @@ export interface ExecutionMetadata {
   startTime: Date;
   endTime: Date;
   totalDuration: number;
-  blocksExecuted: number;
-  blocksSucceeded: number;
-  blocksFailed: number;
+  nodesExecuted: number;
+  nodesSucceeded: number;
+  nodesFailed: number;
 }
 
 // ============================================
@@ -60,11 +66,11 @@ export interface ExecutionMetadata {
 /**
  * Context provided to tools during execution
  */
-export interface BlockExecutionContext {
-  /** ID of the currently executing block */
-  currentBlockId: string;
+export interface NodeExecutionContext {
+  /** ID of the currently executing node */
+  currentNodeId: string;
   
-  /** Results from all previously executed blocks */
+  /** Results from all previously executed nodes */
   previousResults: ExecutionState;
   
   /** Read-only reference to the document */
@@ -73,6 +79,9 @@ export interface BlockExecutionContext {
   /** Optional host-provided API/services */
   api?: unknown;
 }
+
+// Backward compatibility
+export type BlockExecutionContext = NodeExecutionContext;
 
 // ============================================
 // Custom Tool Execution
@@ -85,20 +94,20 @@ export interface ToolExecutionContext {
   /** All resolved variables */
   variables: Map<string, string>;
   
-  /** All block execution results in order */
-  blocks: Map<string, BlockExecutionResult>;
+  /** All node execution results in order */
+  nodes: Map<string, NodeExecutionResult>;
   
   /** Execution metadata */
   metadata: {
     toolName: string;
     duration: number;
-    blocksExecuted: number;
-    blocksSucceeded: number;
-    blocksFailed: number;
+    nodesExecuted: number;
+    nodesSucceeded: number;
+    nodesFailed: number;
   };
   
   /** The tool definition for reference */
-  toolDefinition: any; // Will be ToolBlock when we add it to AST
+  toolDefinition: any; // Will be ToolNode when we add it to AST
 }
 
 // ============================================
@@ -111,7 +120,7 @@ export interface ToolExecutionContext {
 export type ToolExecutor<TParams = any, TApi = any> = (
   params: TParams,
   content: string,
-  context: BlockExecutionContext & { api?: TApi }
+  context: NodeExecutionContext & { api?: TApi }
 ) => Promise<unknown> | unknown;
 
 /**
@@ -150,11 +159,11 @@ export interface ExecutionOptions<TApi = any> {
   /** Whether to stop on first error (default: false) */
   stopOnError?: boolean;
   
-  /** Maximum execution time per block in ms (default: 30000) */
+  /** Maximum execution time per node in ms (default: 30000) */
   timeout?: number;
   
   /** Optional callback for execution progress */
-  onProgress?: (blockId: string, index: number, total: number) => void;
+  onProgress?: (nodeId: string, index: number, total: number) => void;
 }
 
 // ============================================
@@ -163,12 +172,16 @@ export interface ExecutionOptions<TApi = any> {
 
 export type ExecutionMode = 'single' | 'document';
 
-export interface SingleBlockExecutionRequest {
+export interface SingleNodeExecutionRequest {
   mode: 'single';
   document: IdyllDocument;
-  blockId: string;
+  nodeId?: string;
+  blockId?: string; // Backward compatibility
   options: ExecutionOptions;
 }
+
+// Backward compatibility
+export type SingleBlockExecutionRequest = SingleNodeExecutionRequest;
 
 export interface DocumentExecutionRequest {
   mode: 'document';
@@ -176,4 +189,4 @@ export interface DocumentExecutionRequest {
   options: ExecutionOptions;
 }
 
-export type ExecutionRequest = SingleBlockExecutionRequest | DocumentExecutionRequest;
+export type ExecutionRequest = SingleNodeExecutionRequest | DocumentExecutionRequest;

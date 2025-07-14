@@ -2,19 +2,21 @@
  * Bidirectional converter between BlockNote and Idyllic XML formats
  * 
  * Provides isomorphic conversion that preserves all data and structure.
+ * Note: BlockNote still uses 'block' terminology, so we maintain that in
+ * interfaces specific to BlockNote while using 'node' for Idyllic AST.
  */
 
 import type { 
-  Block, 
-  ContentBlock, 
-  ExecutableBlock, 
+  Node, 
+  ContentNode, 
+  ExecutableNode, 
   RichContent,
   TextContent,
   InlineElement,
-  ContentBlockType,
-  ExecutableBlockType
-} from './ast';
-import { isContentBlock, isExecutableBlock } from './ast';
+  ContentNodeType,
+  ExecutableNodeType
+} from '../../document/ast';
+import { isContentNode, isExecutableNode } from '../../document/ast';
 
 // BlockNote type definitions (based on the kitchen sink example)
 export interface BlockNoteBlock {
@@ -45,24 +47,24 @@ export interface BlockNoteTableContent {
 }
 
 /**
- * Convert BlockNote document to Idyllic blocks
+ * Convert BlockNote document to Idyllic nodes
  */
-export function blockNoteToIdyllic(blockNoteBlocks: BlockNoteBlock[]): Block[] {
+export function blockNoteToIdyllic(blockNoteBlocks: BlockNoteBlock[]): Node[] {
   return blockNoteBlocks.map(convertBlockNoteBlock);
 }
 
 /**
- * Convert Idyllic blocks to BlockNote document
+ * Convert Idyllic nodes to BlockNote document
  */
-export function idyllicToBlockNote(idyllicBlocks: Block[]): BlockNoteBlock[] {
-  return idyllicBlocks.map(convertIdyllicBlock);
+export function idyllicToBlockNote(idyllicNodes: Node[]): BlockNoteBlock[] {
+  return idyllicNodes.map(convertIdyllicNode);
 }
 
 // ============================================
 // BlockNote to Idyllic Conversion
 // ============================================
 
-function convertBlockNoteBlock(bnBlock: BlockNoteBlock): Block {
+function convertBlockNoteBlock(bnBlock: BlockNoteBlock): Node {
   const { id, type, props, content, children } = bnBlock;
 
   // Handle executable blocks
@@ -77,11 +79,11 @@ function convertBlockNoteBlock(bnBlock: BlockNoteBlock): Block {
         enabled: props.enabled,
         modelId: props.modelId,
       }
-    } as ExecutableBlock;
+    } as ExecutableNode;
   }
 
   if (type === 'tool') {
-    // Tool blocks in BlockNote map to a special content block in Idyllic
+    // Tool blocks in BlockNote map to a special content node in Idyllic
     return {
       id,
       type: 'tool',
@@ -92,14 +94,14 @@ function convertBlockNoteBlock(bnBlock: BlockNoteBlock): Block {
         toolDefinition: props.toolDefinition
       },
       children: children.map(convertBlockNoteBlock)
-    } as ContentBlock;
+    } as ContentNode;
   }
 
   // Handle table specially
   if (type === 'table') {
     return {
       id,
-      type: 'data', // Tables map to data blocks in Idyllic
+      type: 'data', // Tables map to data nodes in Idyllic
       content: [{ type: 'text', text: JSON.stringify(content) }],
       props: {
         title: 'Table',
@@ -107,7 +109,7 @@ function convertBlockNoteBlock(bnBlock: BlockNoteBlock): Block {
         ...props
       },
       children: []
-    } as ContentBlock;
+    } as ContentNode;
   }
 
   // Handle functionCall blocks
@@ -128,11 +130,11 @@ function convertBlockNoteBlock(bnBlock: BlockNoteBlock): Block {
       metadata: {
         modelId: props.modelId
       }
-    } as ExecutableBlock;
+    } as ExecutableNode;
   }
 
   // Map BlockNote types to Idyllic types
-  const typeMapping: Record<string, ContentBlockType> = {
+  const typeMapping: Record<string, ContentNodeType> = {
     'paragraph': 'paragraph',
     'heading': 'heading',
     'bulletListItem': 'bulletListItem',
@@ -150,8 +152,8 @@ function convertBlockNoteBlock(bnBlock: BlockNoteBlock): Block {
     ? convertBlockNoteContent(content)
     : [{ type: 'text', text: '' } as TextContent];
 
-  // Build the content block
-  const block: ContentBlock = {
+  // Build the content node
+  const node: ContentNode = {
     id,
     type: idyllicType,
     content: idyllicContent,
@@ -160,10 +162,10 @@ function convertBlockNoteBlock(bnBlock: BlockNoteBlock): Block {
 
   // Add props if they exist
   if (Object.keys(props).length > 0) {
-    block.props = { ...props };
+    node.props = { ...props };
   }
 
-  return block;
+  return node;
 }
 
 function convertBlockNoteContent(content: BlockNoteContent[]): RichContent[] {
@@ -232,75 +234,75 @@ function mapMentionType(bnType: string): 'user' | 'document' | 'agent' | 'custom
 // Idyllic to BlockNote Conversion
 // ============================================
 
-function convertIdyllicBlock(block: Block): BlockNoteBlock {
-  const { id } = block;
+function convertIdyllicNode(node: Node): BlockNoteBlock {
+  const { id } = node;
 
-  if (isExecutableBlock(block)) {
-    if (block.type === 'trigger') {
+  if (isExecutableNode(node)) {
+    if (node.type === 'trigger') {
       return {
         id,
         type: 'trigger',
         props: {
-          trigger: block.tool,
-          params: JSON.stringify(block.parameters),
-          enabled: block.metadata?.enabled ?? true,
-          modelId: block.metadata?.modelId
+          trigger: node.tool,
+          params: JSON.stringify(node.parameters),
+          enabled: node.metadata?.enabled ?? true,
+          modelId: node.metadata?.modelId
         },
-        content: block.instructions && block.instructions.length > 0 
-          ? convertIdyllicContent(block.instructions) 
+        content: node.instructions && node.instructions.length > 0 
+          ? convertIdyllicContent(node.instructions) 
           : [{ type: 'text', text: '', styles: {} }],
         children: []
       };
     }
 
-    if (block.type === 'function_call') {
+    if (node.type === 'function_call') {
       return {
         id,
         type: 'functionCall',
         props: {
-          tool: block.tool,
-          params: JSON.stringify(block.parameters),
-          response: block.result?.data ? JSON.stringify(block.result.data) : '',
-          error: block.result?.error ? JSON.stringify(block.result.error) : '',
-          modelId: block.metadata?.modelId
+          tool: node.tool,
+          params: JSON.stringify(node.parameters),
+          response: node.result?.data ? JSON.stringify(node.result.data) : '',
+          error: node.result?.error ? JSON.stringify(node.result.error) : '',
+          modelId: node.metadata?.modelId
         },
-        content: block.instructions && block.instructions.length > 0 
-          ? convertIdyllicContent(block.instructions) 
+        content: node.instructions && node.instructions.length > 0 
+          ? convertIdyllicContent(node.instructions) 
           : [{ type: 'text', text: '', styles: {} }],
         children: []
       };
     }
   }
 
-  // Handle content blocks
-  const contentBlock = block as ContentBlock;
+  // Handle content nodes
+  const contentNode = node as ContentNode;
   
-  // Special handling for tool blocks
-  if (contentBlock.type === 'tool') {
+  // Special handling for tool nodes
+  if (contentNode.type === 'tool') {
     return {
       id,
       type: 'tool',
       props: {
-        title: contentBlock.props?.title || 'Tool',
-        icon: contentBlock.props?.icon || '🔧',
-        toolDefinition: contentBlock.props?.toolDefinition || ''
+        title: contentNode.props?.title || 'Tool',
+        icon: contentNode.props?.icon || '🔧',
+        toolDefinition: contentNode.props?.toolDefinition || ''
       },
       content: [],
-      children: contentBlock.children ? contentBlock.children.map(convertIdyllicBlock) : []
+      children: contentNode.children ? contentNode.children.map(convertIdyllicNode) : []
     };
   }
 
-  // Special handling for data blocks that were originally tables
-  if (contentBlock.type === 'data' && contentBlock.props?.originalType === 'table') {
+  // Special handling for data nodes that were originally tables
+  if (contentNode.type === 'data' && contentNode.props?.originalType === 'table') {
     try {
-      const firstContent = contentBlock.content[0];
+      const firstContent = contentNode.content[0];
       const tableData = JSON.parse(
         firstContent && firstContent.type === 'text' ? firstContent.text : '{}'
       );
       return {
         id,
         type: 'table',
-        props: { textColor: contentBlock.props.textColor || 'default' },
+        props: { textColor: contentNode.props.textColor || 'default' },
         content: tableData,
         children: []
       };
@@ -319,43 +321,43 @@ function convertIdyllicBlock(block: Block): BlockNoteBlock {
     'quote': 'quote',
     'code': 'codeBlock',
     'separator': 'separator',
-    'data': 'paragraph', // Generic data blocks become paragraphs
+    'data': 'paragraph', // Generic data nodes become paragraphs
   };
 
-  const bnType = typeMapping[contentBlock.type] || 'paragraph';
+  const bnType = typeMapping[contentNode.type] || 'paragraph';
 
   // Build BlockNote props
   const bnProps: Record<string, any> = {};
   
   // Standard props
   if (bnType !== 'separator' && bnType !== 'codeBlock') {
-    bnProps.textColor = contentBlock.props?.textColor || 'default';
-    bnProps.textAlignment = contentBlock.props?.textAlignment || 'left';
-    bnProps.backgroundColor = contentBlock.props?.backgroundColor || 'default';
+    bnProps.textColor = contentNode.props?.textColor || 'default';
+    bnProps.textAlignment = contentNode.props?.textAlignment || 'left';
+    bnProps.backgroundColor = contentNode.props?.backgroundColor || 'default';
   }
 
   // Type-specific props
-  if (contentBlock.type === 'heading') {
-    bnProps.level = contentBlock.props?.level || 1;
-  } else if (contentBlock.type === 'checklistItem') {
-    bnProps.checked = contentBlock.props?.checked || false;
-  } else if (contentBlock.type === 'code') {
-    bnProps.language = contentBlock.props?.language || 'text';
-  } else if (contentBlock.type === 'separator') {
-    bnProps.text = contentBlock.props?.text || '';
+  if (contentNode.type === 'heading') {
+    bnProps.level = contentNode.props?.level || 1;
+  } else if (contentNode.type === 'checklistItem') {
+    bnProps.checked = contentNode.props?.checked || false;
+  } else if (contentNode.type === 'code') {
+    bnProps.language = contentNode.props?.language || 'text';
+  } else if (contentNode.type === 'separator') {
+    bnProps.text = contentNode.props?.text || '';
   }
 
   // Copy any additional props
-  if (contentBlock.props) {
-    Object.keys(contentBlock.props).forEach(key => {
+  if (contentNode.props) {
+    Object.keys(contentNode.props).forEach(key => {
       if (!bnProps[key]) {
-        bnProps[key] = contentBlock.props![key];
+        bnProps[key] = contentNode.props![key];
       }
     });
   }
 
   // Ensure content is never empty for BlockNote
-  const bnContent = convertIdyllicContent(contentBlock.content);
+  const bnContent = convertIdyllicContent(contentNode.content);
   const finalContent = bnContent.length > 0 ? bnContent : [{ type: 'text', text: '', styles: {} }];
 
   return {
@@ -363,7 +365,7 @@ function convertIdyllicBlock(block: Block): BlockNoteBlock {
     type: bnType,
     props: bnProps,
     content: finalContent,
-    children: contentBlock.children ? contentBlock.children.map(convertIdyllicBlock) : []
+    children: contentNode.children ? contentNode.children.map(convertIdyllicNode) : []
   };
 }
 

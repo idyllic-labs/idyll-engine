@@ -4,8 +4,8 @@
  * Handles the resolution of variables in custom tools using AI interpolation
  */
 
-import type { Block, RichContent, VariableElement } from './ast';
-import { isVariable, traverseBlocks } from './ast';
+import type { Node, RichContent, VariableElement } from './ast';
+import { isVariable, traverseNodes } from './ast';
 
 /**
  * Variable with metadata for resolution
@@ -46,20 +46,20 @@ export interface VariableResolutionResult {
  * Extract all unique variables from blocks
  * Follows declare-once, use-many pattern
  */
-export function extractVariableDefinitions(blocks: Block[]): VariableDefinition[] {
+export function extractVariableDefinitions(nodes: Node[]): VariableDefinition[] {
   const definitions = new Map<string, VariableDefinition>();
   const seenNames = new Set<string>();
   
   let globalIndex = 0;
   
-  for (const block of traverseBlocks(blocks)) {
-    if ('content' in block && Array.isArray(block.content)) {
-      processContent(block.content, block.id);
+  for (const node of traverseNodes(nodes)) {
+    if ('content' in node && Array.isArray(node.content)) {
+      processContent(node.content, node.id);
     }
     
-    // Check executable block instructions
-    if ('instructions' in block && block.instructions) {
-      processContent(block.instructions, block.id);
+    // Check executable node instructions
+    if ('instructions' in node && node.instructions) {
+      processContent(node.instructions, node.id);
     }
   }
   
@@ -89,12 +89,12 @@ export function extractVariableDefinitions(blocks: Block[]): VariableDefinition[
 /**
  * Check for variable redeclaration errors
  */
-export function checkVariableRedeclaration(blocks: Block[]): Array<{ name: string; error: string }> {
+export function checkVariableRedeclaration(nodes: Node[]): Array<{ name: string; error: string }> {
   const errors: Array<{ name: string; error: string }> = [];
-  const declarations = new Map<string, { blockId: string; prompt?: string }>();
+  const declarations = new Map<string, { nodeId: string; prompt?: string }>();
   
-  for (const block of traverseBlocks(blocks)) {
-    const variables = extractVariablesFromBlock(block);
+  for (const node of traverseNodes(nodes)) {
+    const variables = extractVariablesFromNode(node);
     
     for (const variable of variables) {
       const existing = declarations.get(variable.name);
@@ -110,7 +110,7 @@ export function checkVariableRedeclaration(blocks: Block[]): Array<{ name: strin
       } else if (variable.prompt) {
         // First declaration with prompt
         declarations.set(variable.name, {
-          blockId: block.id,
+          nodeId: node.id,
           prompt: variable.prompt,
         });
       }
@@ -123,7 +123,7 @@ export function checkVariableRedeclaration(blocks: Block[]): Array<{ name: strin
 /**
  * Extract variables from a single block
  */
-function extractVariablesFromBlock(block: Block): VariableElement[] {
+function extractVariablesFromNode(node: Node): VariableElement[] {
   const variables: VariableElement[] = [];
   
   function extractFromContent(content: RichContent[]) {
@@ -136,12 +136,12 @@ function extractVariablesFromBlock(block: Block): VariableElement[] {
     }
   }
   
-  if ('content' in block && Array.isArray(block.content)) {
-    extractFromContent(block.content);
+  if ('content' in node && Array.isArray(node.content)) {
+    extractFromContent(node.content);
   }
   
-  if ('instructions' in block && block.instructions) {
-    extractFromContent(block.instructions);
+  if ('instructions' in node && node.instructions) {
+    extractFromContent(node.instructions);
   }
   
   return variables;
@@ -222,23 +222,23 @@ async function mockResolveVariable(
 }
 
 /**
- * Apply resolved variable values to blocks
+ * Apply resolved variable values to nodes
  * Updates variable elements with resolvedValue
  */
 export function applyResolvedVariables(
-  blocks: Block[],
+  nodes: Node[],
   resolvedVariables: Map<string, string>
-): Block[] {
-  // Deep clone blocks to avoid mutation
-  const clonedBlocks = JSON.parse(JSON.stringify(blocks)) as Block[];
+): Node[] {
+  // Deep clone nodes to avoid mutation
+  const clonedNodes = JSON.parse(JSON.stringify(nodes)) as Node[];
   
-  for (const block of traverseBlocks(clonedBlocks)) {
-    if ('content' in block && Array.isArray(block.content)) {
-      block.content = applyToContent(block.content);
+  for (const node of traverseNodes(clonedNodes)) {
+    if ('content' in node && Array.isArray(node.content)) {
+      node.content = applyToContent(node.content);
     }
     
-    if ('instructions' in block && block.instructions) {
-      block.instructions = applyToContent(block.instructions);
+    if ('instructions' in node && node.instructions) {
+      node.instructions = applyToContent(node.instructions);
     }
   }
   
@@ -262,7 +262,7 @@ export function applyResolvedVariables(
     });
   }
   
-  return clonedBlocks;
+  return clonedNodes;
 }
 
 /**

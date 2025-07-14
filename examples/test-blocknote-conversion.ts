@@ -4,7 +4,7 @@
  */
 
 import { readFile, writeFile } from 'fs/promises';
-import { blockNoteToIdyllic, idyllicToBlockNote, testIsomorphism } from '../document/blocknote-converter';
+import { blockNoteToIdyllic, idyllicToBlockNote, testIsomorphism } from '../integrations/blocknote';
 import { serializeToXML } from '../document/parser-grammar';
 import type { IdyllDocument } from '../document/ast';
 

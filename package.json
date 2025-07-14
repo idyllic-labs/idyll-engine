@@ -1,6 +1,6 @@
 {
   "name": "@idyllic-labs/idyll-engine",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Document execution engine for Idyllic language experimentation",
   "type": "module",
   "main": "./dist/index.js",
@@ -8,6 +8,9 @@
   "exports": {
     ".": {
       "import": "./dist/index.js"
+    },
+    "./integrations/blocknote": {
+      "import": "./dist/integrations/blocknote/index.js"
     }
   },
   "files": [

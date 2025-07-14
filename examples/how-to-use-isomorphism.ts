@@ -3,7 +3,7 @@
  * How to use the BlockNote ↔ Idyllic isomorphism
  */
 
-import { blockNoteToIdyllic, idyllicToBlockNote } from '../document/blocknote-converter';
+import { blockNoteToIdyllic, idyllicToBlockNote } from '../integrations/blocknote';
 import { serializeToXML, parseXML } from '../document/parser-grammar';
 import { applyDiff } from '../document/diff-applier';
 import type { Block, EditOperation, IdyllDocument } from '../document/ast';

@@ -1,14 +1,16 @@
 /**
  * Document Executor for Idyllic Engine
  * 
- * Handles execution of executable blocks within documents,
+ * Handles execution of executable nodes within documents,
  * maintaining execution state and providing context to tools.
  */
 
 import { z } from 'zod';
 import type { 
   IdyllDocument, 
+  Node, 
   Block, 
+  ExecutableNode, 
   ExecutableBlock, 
   RichContent 
 } from './ast';
@@ -16,8 +18,11 @@ import type {
   ExecutionState,
   ExecutionReport,
   ExecutionOptions,
+  NodeExecutionResult,
   BlockExecutionResult,
+  NodeExecutionContext,
   BlockExecutionContext,
+  NodeExecutionError,
   BlockExecutionError,
   ExecutionMetadata,
   ExecutionRequest,
@@ -35,45 +40,45 @@ export class DocumentExecutor<TApi = any> {
   }
   
   /**
-   * Execute a single block or entire document
+   * Execute a single node or entire document
    */
   async execute(request: ExecutionRequest): Promise<ExecutionReport> {
     if (request.mode === 'single') {
-      return this.executeSingleBlock(request.document, request.blockId);
+      return this.executeSingleNode(request.document, (request as any).nodeId || (request as any).blockId!);
     } else {
       return this.executeDocument(request.document);
     }
   }
   
   /**
-   * Execute all executable blocks in a document
+   * Execute all executable nodes in a document
    */
   async executeDocument(document: IdyllDocument): Promise<ExecutionReport> {
     const startTime = new Date();
     const state: ExecutionState = new Map();
     
-    // Find all executable blocks
-    const executableBlocks = this.findExecutableBlocks(document.blocks);
-    const total = executableBlocks.length;
+    // Find all executable nodes
+    const executableNodes = this.findExecutableNodes(document.nodes || (document as any).blocks);
+    const total = executableNodes.length;
     
-    // Execute blocks sequentially
-    for (let i = 0; i < executableBlocks.length; i++) {
-      const block = executableBlocks[i];
+    // Execute nodes sequentially
+    for (let i = 0; i < executableNodes.length; i++) {
+      const node = executableNodes[i];
       
       // Progress callback
-      this.options.onProgress?.(block.id, i + 1, total);
+      this.options.onProgress?.(node.id, i + 1, total);
       
-      // Create context for this block
-      const context: BlockExecutionContext & { api?: TApi } = {
-        currentBlockId: block.id,
+      // Create context for this node
+      const context: NodeExecutionContext & { api?: TApi } = {
+        currentNodeId: node.id,
         previousResults: new Map(state), // Copy current state
         document,
         api: this.options.api,
       };
       
-      // Execute the block
-      const result = await this.executeBlock(block, context);
-      state.set(block.id, result);
+      // Execute the node
+      const result = await this.executeNode(node, context);
+      state.set(node.id, result);
       
       // Stop on error if requested
       if (!result.success && this.options.stopOnError) {
@@ -88,47 +93,47 @@ export class DocumentExecutor<TApi = any> {
       startTime,
       endTime,
       totalDuration: endTime.getTime() - startTime.getTime(),
-      blocksExecuted: state.size,
-      blocksSucceeded: Array.from(state.values()).filter(r => r.success).length,
-      blocksFailed: Array.from(state.values()).filter(r => !r.success).length,
+      nodesExecuted: state.size,
+      nodesSucceeded: Array.from(state.values()).filter(r => r.success).length,
+      nodesFailed: Array.from(state.values()).filter(r => !r.success).length,
     };
     
-    return { blocks: state, metadata };
+    return { nodes: state, metadata };
   }
   
   /**
-   * Execute a single block by ID
+   * Execute a single node by ID
    */
-  async executeSingleBlock(
+  async executeSingleNode(
     document: IdyllDocument, 
-    blockId: string
+    nodeId: string
   ): Promise<ExecutionReport> {
     const startTime = new Date();
     const state: ExecutionState = new Map();
     
-    // Find the block
-    const block = this.findBlockById(document.blocks, blockId);
-    if (!block) {
-      throw new Error(`Block with ID ${blockId} not found`);
+    // Find the node
+    const node = this.findNodeById(document.nodes || (document as any).blocks, nodeId);
+    if (!node) {
+      throw new Error(`Node with ID ${nodeId} not found`);
     }
     
-    if (!this.isExecutableBlock(block)) {
-      throw new Error(`Block ${blockId} is not executable`);
+    if (!this.isExecutableNode(node)) {
+      throw new Error(`Node ${nodeId} is not executable`);
     }
     
-    // Build context with previous results (all blocks before this one)
-    const previousResults = this.getPreviousResults(document, blockId);
+    // Build context with previous results (all nodes before this one)
+    const previousResults = this.getPreviousResults(document, nodeId);
     
-    const context: BlockExecutionContext & { api?: TApi } = {
-      currentBlockId: blockId,
+    const context: NodeExecutionContext & { api?: TApi } = {
+      currentNodeId: nodeId,
       previousResults,
       document,
       api: this.options.api,
     };
     
-    // Execute the block
-    const result = await this.executeBlock(block as ExecutableBlock, context);
-    state.set(blockId, result);
+    // Execute the node
+    const result = await this.executeNode(node as ExecutableNode, context);
+    state.set(nodeId, result);
     
     const endTime = new Date();
     
@@ -136,34 +141,34 @@ export class DocumentExecutor<TApi = any> {
       startTime,
       endTime,
       totalDuration: endTime.getTime() - startTime.getTime(),
-      blocksExecuted: 1,
-      blocksSucceeded: result.success ? 1 : 0,
-      blocksFailed: result.success ? 0 : 1,
+      nodesExecuted: 1,
+      nodesSucceeded: result.success ? 1 : 0,
+      nodesFailed: result.success ? 0 : 1,
     };
     
-    return { blocks: state, metadata };
+    return { nodes: state, metadata };
   }
   
   /**
-   * Execute a single executable block
+   * Execute a single executable node
    */
-  private async executeBlock(
-    block: ExecutableBlock,
-    context: BlockExecutionContext & { api?: TApi }
-  ): Promise<BlockExecutionResult> {
+  private async executeNode(
+    node: ExecutableNode,
+    context: NodeExecutionContext & { api?: TApi }
+  ): Promise<NodeExecutionResult> {
     const startTime = Date.now();
     
     try {
       // Resolve the tool
-      const tool = this.options.tools[block.tool];
+      const tool = this.options.tools[node.tool];
       if (!tool) {
-        throw new Error(`Tool not found: ${block.tool}`);
+        throw new Error(`Tool not found: ${node.tool}`);
       }
       
       // Validate parameters
       let validatedParams: any;
       try {
-        validatedParams = tool.schema.parse(block.parameters);
+        validatedParams = tool.schema.parse(node.parameters);
       } catch (error) {
         if (error instanceof z.ZodError) {
           throw new Error(`Invalid parameters: ${error.errors.map(e => e.message).join(', ')}`);
@@ -172,7 +177,7 @@ export class DocumentExecutor<TApi = any> {
       }
       
       // Extract content as string
-      const content = this.extractContent(block.instructions);
+      const content = this.extractContent(node.instructions);
       
       // Execute with timeout
       const timeoutPromise = new Promise((_, reject) => {
@@ -192,7 +197,7 @@ export class DocumentExecutor<TApi = any> {
       };
       
     } catch (error) {
-      const errorObj: BlockExecutionError = {
+      const errorObj: NodeExecutionError = {
         message: error instanceof Error ? error.message : String(error),
         code: 'EXECUTION_ERROR',
         details: error,
@@ -208,19 +213,19 @@ export class DocumentExecutor<TApi = any> {
   }
   
   /**
-   * Find all executable blocks in document
+   * Find all executable nodes in document
    */
-  private findExecutableBlocks(blocks: Block[]): ExecutableBlock[] {
-    const executable: ExecutableBlock[] = [];
+  private findExecutableNodes(nodes: Node[]): ExecutableNode[] {
+    const executable: ExecutableNode[] = [];
     
-    for (const block of blocks) {
-      if (this.isExecutableBlock(block)) {
-        executable.push(block as ExecutableBlock);
+    for (const node of nodes) {
+      if (this.isExecutableNode(node)) {
+        executable.push(node as ExecutableNode);
       }
       
       // Check children recursively
-      if ('children' in block && block.children) {
-        executable.push(...this.findExecutableBlocks(block.children));
+      if ('children' in node && node.children) {
+        executable.push(...this.findExecutableNodes(node.children));
       }
     }
     
@@ -228,17 +233,17 @@ export class DocumentExecutor<TApi = any> {
   }
   
   /**
-   * Find a block by ID
+   * Find a node by ID
    */
-  private findBlockById(blocks: Block[], id: string): Block | null {
-    for (const block of blocks) {
-      if (block.id === id) {
-        return block;
+  private findNodeById(nodes: Node[], id: string): Node | null {
+    for (const node of nodes) {
+      if (node.id === id) {
+        return node;
       }
       
       // Check children
-      if ('children' in block && block.children) {
-        const found = this.findBlockById(block.children, id);
+      if ('children' in node && node.children) {
+        const found = this.findNodeById(node.children, id);
         if (found) return found;
       }
     }
@@ -247,15 +252,15 @@ export class DocumentExecutor<TApi = any> {
   }
   
   /**
-   * Get results from all blocks before the given block
+   * Get results from all nodes before the given node
    */
-  private getPreviousResults(document: IdyllDocument, beforeBlockId: string): ExecutionState {
+  private getPreviousResults(document: IdyllDocument, beforeNodeId: string): ExecutionState {
     const results: ExecutionState = new Map();
-    const executableBlocks = this.findExecutableBlocks(document.blocks);
+    const executableNodes = this.findExecutableNodes(document.nodes || (document as any).blocks);
     
-    // Find all blocks before the target block
-    for (const block of executableBlocks) {
-      if (block.id === beforeBlockId) {
+    // Find all nodes before the target node
+    for (const node of executableNodes) {
+      if (node.id === beforeNodeId) {
         break;
       }
       // Note: We don't have actual results in this case, 
@@ -267,10 +272,10 @@ export class DocumentExecutor<TApi = any> {
   }
   
   /**
-   * Check if a block is executable
+   * Check if a node is executable
    */
-  private isExecutableBlock(block: Block): boolean {
-    return block.type === 'function_call' || block.type === 'trigger';
+  private isExecutableNode(node: Node): boolean {
+    return node.type === 'function_call' || node.type === 'trigger';
   }
   
   /**

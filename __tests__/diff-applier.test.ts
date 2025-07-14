@@ -4,30 +4,30 @@
  */
 
 import { applyDiff } from '../document/diff-applier';
-import type { Block, EditOperation, ContentBlock, ExecutableBlock } from '../document/ast';
-import { isContentBlock, isExecutableBlock } from '../document/ast';
+import type { Node, EditOperation, ContentNode, ExecutableNode } from '../document/ast';
+import { isContentNode, isExecutableNode } from '../document/ast';
 
 // Sample document blocks
-const sampleBlocks: Block[] = [
+const sampleNodes: Node[] = [
   {
     id: 'block1',
     type: 'paragraph',
     content: [{ type: 'text', text: 'Hello world' }],
     props: { className: 'intro' }
-  } as ContentBlock,
+  } as ContentNode,
   {
     id: 'block2', 
     type: 'heading',
     content: [{ type: 'text', text: 'Section 1' }],
     props: { level: 2 }
-  } as ContentBlock,
+  } as ContentNode,
   {
     id: 'fn1',
     type: 'function_call',
     tool: 'demo:echo',
     parameters: { message: 'original message' },
     instructions: [{ type: 'text', text: 'Echo this message' }]
-  } as ExecutableBlock
+  } as ExecutableNode
 ];
 
 console.log('🧪 Testing Diff Implementation\n');
@@ -41,11 +41,11 @@ const editAttrOp: EditOperation = {
   value: 'updated-intro'
 };
 
-const result1 = applyDiff(sampleBlocks, [editAttrOp]);
+const result1 = applyDiff(sampleNodes, [editAttrOp]);
 console.log('Success:', result1.success);
 if (result1.success) {
-  const updatedBlock = result1.blocks?.find(b => b.id === 'block1');
-  if (updatedBlock && isContentBlock(updatedBlock)) {
+  const updatedBlock = result1.nodes?.find(b => b.id === 'block1');
+  if (updatedBlock && isContentNode(updatedBlock)) {
     console.log('Updated className:', updatedBlock.props?.className);
   }
 }
@@ -63,11 +63,11 @@ const editContentOp: EditOperation = {
   ]
 };
 
-const result2 = applyDiff(result1.blocks || sampleBlocks, [editContentOp]);
+const result2 = applyDiff(result1.nodes || sampleNodes, [editContentOp]);
 console.log('Success:', result2.success);
 if (result2.success) {
-  const updatedBlock = result2.blocks?.find(b => b.id === 'block2');
-  if (updatedBlock && isContentBlock(updatedBlock)) {
+  const updatedBlock = result2.nodes?.find(b => b.id === 'block2');
+  if (updatedBlock && isContentNode(updatedBlock)) {
     console.log('Updated content:', JSON.stringify(updatedBlock.content, null, 2));
   }
 }
@@ -81,11 +81,11 @@ const editParamsOp: EditOperation = {
   params: { message: 'updated message', count: 3 }
 };
 
-const result3 = applyDiff(result2.blocks || sampleBlocks, [editParamsOp]);
+const result3 = applyDiff(result2.nodes || sampleNodes, [editParamsOp]);
 console.log('Success:', result3.success);
 if (result3.success) {
-  const updatedBlock = result3.blocks?.find(b => b.id === 'fn1');
-  if (updatedBlock && isExecutableBlock(updatedBlock)) {
+  const updatedBlock = result3.nodes?.find(b => b.id === 'fn1');
+  if (updatedBlock && isExecutableNode(updatedBlock)) {
     console.log('Updated params:', updatedBlock.parameters);
   }
 }
@@ -103,11 +103,11 @@ const insertOp: EditOperation = {
   }]
 };
 
-const result4 = applyDiff(result3.blocks || sampleBlocks, [insertOp]);
+const result4 = applyDiff(result3.nodes || sampleNodes, [insertOp]);
 console.log('Success:', result4.success);
 if (result4.success) {
-  console.log('Block count after insert:', result4.blocks?.length);
-  console.log('Block IDs:', result4.blocks?.map(b => b.id));
+  console.log('Block count after insert:', result4.nodes?.length);
+  console.log('Block IDs:', result4.nodes?.map(b => b.id));
 }
 console.log();
 
@@ -119,10 +119,10 @@ const moveOp: EditOperation = {
   atStart: true
 };
 
-const result5 = applyDiff(result4.blocks || sampleBlocks, [moveOp]);
+const result5 = applyDiff(result4.nodes || sampleNodes, [moveOp]);
 console.log('Success:', result5.success);
 if (result5.success) {
-  console.log('Block order after move:', result5.blocks?.map(b => b.id));
+  console.log('Block order after move:', result5.nodes?.map(b => b.id));
 }
 console.log();
 
@@ -133,11 +133,11 @@ const deleteOp: EditOperation = {
   blockId: 'new-block'
 };
 
-const result6 = applyDiff(result5.blocks || sampleBlocks, [deleteOp]);
+const result6 = applyDiff(result5.nodes || sampleNodes, [deleteOp]);
 console.log('Success:', result6.success);
 if (result6.success) {
-  console.log('Final block count:', result6.blocks?.length);
-  console.log('Final block IDs:', result6.blocks?.map(b => b.id));
+  console.log('Final block count:', result6.nodes?.length);
+  console.log('Final block IDs:', result6.nodes?.map(b => b.id));
 }
 console.log();
 
@@ -150,7 +150,7 @@ const badOp: EditOperation = {
   value: 'test'
 };
 
-const errorResult = applyDiff(result6.blocks || sampleBlocks, [badOp]);
+const errorResult = applyDiff(result6.nodes || sampleNodes, [badOp]);
 console.log('Success:', errorResult.success);
 console.log('Error:', errorResult.error);
 console.log();

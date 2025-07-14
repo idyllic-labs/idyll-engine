@@ -1,9 +1,15 @@
 // document/ast.ts
+function isContentNode(node) {
+  return !isExecutableNode(node);
+}
 function isContentBlock(block) {
-  return !isExecutableBlock(block);
+  return isContentNode(block);
+}
+function isExecutableNode(node) {
+  return node.type === "function_call" || node.type === "trigger";
 }
 function isExecutableBlock(block) {
-  return block.type === "function_call" || block.type === "trigger";
+  return isExecutableNode(block);
 }
 function isTextContent(content) {
   return content.type === "text";
@@ -14,32 +20,41 @@ function isMention(content) {
 function isVariable(content) {
   return content.type === "variable";
 }
-function* traverseBlocks(blocks) {
-  for (const block of blocks) {
-    yield block;
-    if ("children" in block && block.children) {
-      yield* traverseBlocks(block.children);
+function* traverseNodes(nodes) {
+  for (const node of nodes) {
+    yield node;
+    if ("children" in node && node.children) {
+      yield* traverseNodes(node.children);
     }
   }
 }
-function findBlock(blocks, id) {
-  for (const block of traverseBlocks(blocks)) {
-    if (block.id === id) {
-      return block;
+function* traverseBlocks(blocks) {
+  yield* traverseNodes(blocks);
+}
+function findNode(nodes, id) {
+  for (const node of traverseNodes(nodes)) {
+    if (node.id === id) {
+      return node;
     }
   }
   return void 0;
 }
-function getExecutableBlocks(blocks) {
+function findBlock(blocks, id) {
+  return findNode(blocks, id);
+}
+function getExecutableNodes(nodes) {
   const executable = [];
-  for (const block of traverseBlocks(blocks)) {
-    if (isExecutableBlock(block)) {
-      executable.push(block);
+  for (const node of traverseNodes(nodes)) {
+    if (isExecutableNode(node)) {
+      executable.push(node);
     }
   }
   return executable;
 }
-function extractMentions(blocks) {
+function getExecutableBlocks(blocks) {
+  return getExecutableNodes(blocks);
+}
+function extractMentions(nodes) {
   const mentions = [];
   function extractFromContent(content) {
     for (const item of content) {
@@ -50,17 +65,17 @@ function extractMentions(blocks) {
       }
     }
   }
-  for (const block of traverseBlocks(blocks)) {
-    if ("content" in block && Array.isArray(block.content)) {
-      extractFromContent(block.content);
+  for (const node of traverseNodes(nodes)) {
+    if ("content" in node && Array.isArray(node.content)) {
+      extractFromContent(node.content);
     }
-    if (isExecutableBlock(block) && block.instructions) {
-      extractFromContent(block.instructions);
+    if (isExecutableNode(node) && node.instructions) {
+      extractFromContent(node.instructions);
     }
   }
   return mentions;
 }
-function extractVariables(blocks) {
+function extractVariables(nodes) {
   const variables = [];
   function extractFromContent(content) {
     for (const item of content) {
@@ -71,12 +86,12 @@ function extractVariables(blocks) {
       }
     }
   }
-  for (const block of traverseBlocks(blocks)) {
-    if ("content" in block && Array.isArray(block.content)) {
-      extractFromContent(block.content);
+  for (const node of traverseNodes(nodes)) {
+    if ("content" in node && Array.isArray(node.content)) {
+      extractFromContent(node.content);
     }
-    if (isExecutableBlock(block) && block.instructions) {
-      extractFromContent(block.instructions);
+    if (isExecutableNode(node) && node.instructions) {
+      extractFromContent(node.instructions);
     }
   }
   return variables;
@@ -742,19 +757,19 @@ function parseDocument(documentElement) {
     );
   }
   const documentId = attrs.id || uuidv4();
-  const blocks = [];
+  const nodes = [];
   const childElements = documentElement.elements || [];
   for (const element of childElements) {
     if (element.type === "element" && element.name) {
-      const block = parseBlock(element);
-      if (block) {
-        blocks.push(block);
+      const node = parseNode(element);
+      if (node) {
+        nodes.push(node);
       }
     }
   }
   return {
     id: documentId,
-    blocks: blocks.length > 0 ? blocks : [createEmptyParagraph()],
+    nodes: nodes.length > 0 ? nodes : [createEmptyParagraph()],
     metadata: extractMetadata(attrs)
   };
 }
@@ -767,13 +782,13 @@ function parseAgent(agentElement) {
     );
   }
   const agentId = attrs.id || uuidv4();
-  const blocks = [];
+  const nodes = [];
   const childElements = agentElement.elements || [];
   for (const element of childElements) {
     if (element.type === "element" && element.name) {
-      const block = parseBlock(element);
-      if (block) {
-        blocks.push(block);
+      const node = parseNode(element);
+      if (node) {
+        nodes.push(node);
       }
     }
   }
@@ -783,7 +798,7 @@ function parseAgent(agentElement) {
     name: attrs.name,
     description: attrs.description,
     model: attrs.model,
-    blocks
+    nodes
   };
 }
 function parseDiff(diffElement) {
@@ -818,60 +833,60 @@ function parseEditOperation(element) {
     case "edit:prop":
       return {
         type: "edit:attr",
-        blockId: attrs["block-id"],
+        nodeId: attrs["node-id"] || attrs["block-id"],
         name: attrs.name,
         value: attrs.value
       };
     case "edit:content":
       return {
         type: "edit:content",
-        blockId: attrs["block-id"],
+        nodeId: attrs["node-id"] || attrs["block-id"],
         content: parseRichContent(element)
       };
     case "insert":
-      const insertBlocks = [];
+      const insertNodes = [];
       for (const child of element.elements || []) {
         if (child.type === "element" && child.name) {
-          const block = parseBlock(child);
-          if (block) {
-            insertBlocks.push(block);
+          const node = parseNode(child);
+          if (node) {
+            insertNodes.push(node);
           }
         }
       }
       return {
         type: "insert",
-        afterBlockId: attrs["after-block-id"],
-        beforeBlockId: attrs["before-block-id"],
+        afterNodeId: attrs["after-node-id"] || attrs["after-block-id"],
+        beforeNodeId: attrs["before-node-id"] || attrs["before-block-id"],
         atStart: attrs["at-start"] === "true",
         atEnd: attrs["at-end"] === "true",
-        blocks: insertBlocks
+        nodes: insertNodes
       };
     case "delete":
       return {
         type: "delete",
-        blockId: attrs["block-id"]
+        nodeId: attrs["node-id"] || attrs["block-id"]
       };
     case "replace":
-      const replaceBlocks = [];
+      const replaceNodes = [];
       for (const child of element.elements || []) {
         if (child.type === "element" && child.name) {
-          const block = parseBlock(child);
-          if (block) {
-            replaceBlocks.push(block);
+          const node = parseNode(child);
+          if (node) {
+            replaceNodes.push(node);
           }
         }
       }
       return {
         type: "replace",
-        blockId: attrs["block-id"],
-        blocks: replaceBlocks
+        nodeId: attrs["node-id"] || attrs["block-id"],
+        nodes: replaceNodes
       };
     default:
       console.warn(`Unknown edit operation: ${element.name}`);
       return null;
   }
 }
-function parseBlock(element) {
+function parseNode(element) {
   if (!element.name) return null;
   const elementType = compiled.elementToType[element.name];
   if (!elementType) {
@@ -893,7 +908,7 @@ function parseBlock(element) {
     case "tool":
       return parseTool(element, id, attrs);
     default:
-      return parseContentBlock(element, id, attrs, elementType);
+      return parseContentNode(element, id, attrs, elementType);
   }
 }
 function parseFunctionCall(element, id, attrs) {
@@ -992,9 +1007,9 @@ function parseTool(element, id, attrs) {
               if (compiled.elementToType[defChild.name] === "tool") {
                 throw new ParseError("Tools cannot contain other tools");
               }
-              const block = parseBlock(defChild);
-              if (block) {
-                definition.push(block);
+              const node = parseNode(defChild);
+              if (node) {
+                definition.push(node);
               }
             }
           }
@@ -1010,16 +1025,16 @@ function parseTool(element, id, attrs) {
     props: { title, icon }
   };
 }
-function parseContentBlock(element, id, attrs, blockType) {
+function parseContentNode(element, id, attrs, blockType) {
   const content = parseRichContent(element);
   const children = [];
   for (const child of element.elements || []) {
     if (child.type === "element" && child.name) {
       const childType = compiled.elementToType[child.name];
       if (childType && compiled.blockTypes.has(childType)) {
-        const childBlock = parseBlock(child);
-        if (childBlock) {
-          children.push(childBlock);
+        const childNode = parseNode(child);
+        if (childNode) {
+          children.push(childNode);
         }
       }
     }
@@ -1181,7 +1196,7 @@ function serializeIdyllDocument(document) {
       id: document.id,
       ...serializeMetadata(document.metadata)
     },
-    elements: document.blocks.map(serializeBlock)
+    elements: document.nodes.map(serializeNode)
   };
 }
 function serializeAgentDocument(document) {
@@ -1194,7 +1209,7 @@ function serializeAgentDocument(document) {
       ...document.description && { description: document.description },
       ...document.model && { model: document.model }
     },
-    elements: document.blocks.map(serializeBlock)
+    elements: document.nodes.map(serializeNode)
   };
 }
 function serializeDiffDocument(document) {
@@ -1210,45 +1225,45 @@ function serializeDiffDocument(document) {
     elements: document.operations.map(serializeEditOperation)
   };
 }
-function serializeBlock(block) {
-  if (isExecutableBlock(block)) {
-    return serializeExecutableBlock(block);
+function serializeNode(node) {
+  if (isExecutableNode(node)) {
+    return serializeExecutableNode(node);
   }
-  if (block.type === "tool") {
-    return serializeToolBlock(block);
+  if (node.type === "tool") {
+    return serializeToolNode(node);
   }
-  return serializeContentBlock(block);
+  return serializeContentNode(node);
 }
-function serializeExecutableBlock(block) {
+function serializeExecutableNode(node) {
   const elements = [];
-  if (Object.keys(block.parameters).length > 0) {
+  if (Object.keys(node.parameters).length > 0) {
     elements.push({
       type: "element",
       name: "params",
       elements: [
         {
           type: "cdata",
-          cdata: JSON.stringify(block.parameters)
+          cdata: JSON.stringify(node.parameters)
         }
       ]
     });
   }
-  if (block.instructions && block.instructions.length > 0) {
+  if (node.instructions && node.instructions.length > 0) {
     elements.push({
       type: "element",
       name: "content",
-      elements: serializeRichContent(block.instructions)
+      elements: serializeRichContent(node.instructions)
     });
   }
-  if (block.type === "function_call") {
-    if (block.result) {
+  if (node.type === "function_call") {
+    if (node.result) {
       elements.push({
         type: "element",
         name: "result",
         elements: [
           {
             type: "cdata",
-            cdata: JSON.stringify(block.result.data || block.result)
+            cdata: JSON.stringify(node.result.data || node.result)
           }
         ]
       });
@@ -1257,9 +1272,9 @@ function serializeExecutableBlock(block) {
       type: "element",
       name: "fncall",
       attributes: {
-        id: block.id,
-        "idyll-tool": block.tool,
-        ...block.metadata?.modelId && { modelId: block.metadata.modelId }
+        id: node.id,
+        "idyll-tool": node.tool,
+        ...node.metadata?.modelId && { modelId: node.metadata.modelId }
       },
       elements
     };
@@ -1268,35 +1283,35 @@ function serializeExecutableBlock(block) {
       type: "element",
       name: "trigger",
       attributes: {
-        id: block.id,
-        "idyll-trigger": block.tool,
-        enabled: String(block.metadata?.enabled !== false)
+        id: node.id,
+        "idyll-trigger": node.tool,
+        enabled: String(node.metadata?.enabled !== false)
       },
       elements
     };
   }
 }
-function serializeToolBlock(block) {
+function serializeToolNode(node) {
   const elements = [];
-  const description = block.content.map((c) => isTextContent(c) ? c.text : "").join("");
+  const description = node.content.map((c) => isTextContent(c) ? c.text : "").join("");
   elements.push({
     type: "element",
     name: "tool:description",
     elements: [{ type: "text", text: description }]
   });
-  if (block.children && block.children.length > 0) {
+  if (node.children && node.children.length > 0) {
     elements.push({
       type: "element",
       name: "tool:definition",
-      elements: block.children.map(serializeBlock)
+      elements: node.children.map(serializeNode)
     });
   }
   const attributes = {
-    id: block.id,
-    title: block.props?.title
+    id: node.id,
+    title: node.props?.title
   };
-  if (block.props?.icon) {
-    attributes.icon = block.props.icon;
+  if (node.props?.icon) {
+    attributes.icon = node.props.icon;
   }
   return {
     type: "element",
@@ -1305,10 +1320,10 @@ function serializeToolBlock(block) {
     elements
   };
 }
-function serializeContentBlock(block) {
+function serializeContentNode(node) {
   const elements = [
-    ...serializeRichContent(block.content),
-    ...(block.children || []).map(serializeBlock)
+    ...serializeRichContent(node.content),
+    ...(node.children || []).map(serializeNode)
   ];
   const typeToElement = Object.entries(compiled.elementToType).reduce(
     (acc, [elem, type]) => {
@@ -1318,16 +1333,16 @@ function serializeContentBlock(block) {
     },
     {}
   );
-  let elementName = typeToElement[block.type]?.[0] || "p";
-  if (block.type === "heading" && block.props?.level) {
-    elementName = `h${block.props.level}`;
+  let elementName = typeToElement[node.type]?.[0] || "p";
+  if (node.type === "heading" && node.props?.level) {
+    elementName = `h${node.props.level}`;
   }
   return {
     type: "element",
     name: elementName,
     attributes: {
-      id: block.id,
-      ...block.props
+      id: node.id,
+      ...node.props
     },
     elements: elements.length > 0 ? elements : void 0
   };
@@ -1449,7 +1464,7 @@ function serializeEditOperation(operation) {
         type: "element",
         name: "edit:prop",
         attributes: {
-          "block-id": operation.blockId,
+          "node-id": operation.nodeId || operation.blockId,
           name: operation.name,
           value: operation.value
         }
@@ -1459,7 +1474,7 @@ function serializeEditOperation(operation) {
         type: "element",
         name: "edit:content",
         attributes: {
-          "block-id": operation.blockId
+          "node-id": operation.nodeId || operation.blockId
         },
         elements: serializeRichContent(operation.content)
       };
@@ -1468,8 +1483,14 @@ function serializeEditOperation(operation) {
         type: "element",
         name: "insert",
         attributes: {
+          ...operation.afterNodeId && {
+            "after-node-id": operation.afterNodeId
+          },
           ...operation.afterBlockId && {
             "after-block-id": operation.afterBlockId
+          },
+          ...operation.beforeNodeId && {
+            "before-node-id": operation.beforeNodeId
           },
           ...operation.beforeBlockId && {
             "before-block-id": operation.beforeBlockId
@@ -1477,14 +1498,14 @@ function serializeEditOperation(operation) {
           ...operation.atStart && { "at-start": "true" },
           ...operation.atEnd && { "at-end": "true" }
         },
-        elements: operation.blocks.map(serializeBlock)
+        elements: operation.nodes.map(serializeNode)
       };
     case "delete":
       return {
         type: "element",
         name: "delete",
         attributes: {
-          "block-id": operation.blockId
+          "node-id": operation.nodeId || operation.blockId
         }
       };
     case "replace":
@@ -1492,9 +1513,9 @@ function serializeEditOperation(operation) {
         type: "element",
         name: "replace",
         attributes: {
-          "block-id": operation.blockId
+          "node-id": operation.nodeId || operation.blockId
         },
-        elements: operation.blocks.map(serializeBlock)
+        elements: operation.nodes.map(serializeNode)
       };
     default:
       throw new Error(`Unknown operation type`);
@@ -1515,35 +1536,35 @@ var DocumentExecutor = class {
     };
   }
   /**
-   * Execute a single block or entire document
+   * Execute a single node or entire document
    */
   async execute(request) {
     if (request.mode === "single") {
-      return this.executeSingleBlock(request.document, request.blockId);
+      return this.executeSingleNode(request.document, request.nodeId || request.blockId);
     } else {
       return this.executeDocument(request.document);
     }
   }
   /**
-   * Execute all executable blocks in a document
+   * Execute all executable nodes in a document
    */
   async executeDocument(document) {
     const startTime = /* @__PURE__ */ new Date();
     const state = /* @__PURE__ */ new Map();
-    const executableBlocks = this.findExecutableBlocks(document.blocks);
-    const total = executableBlocks.length;
-    for (let i = 0; i < executableBlocks.length; i++) {
-      const block = executableBlocks[i];
-      this.options.onProgress?.(block.id, i + 1, total);
+    const executableNodes = this.findExecutableNodes(document.nodes || document.blocks);
+    const total = executableNodes.length;
+    for (let i = 0; i < executableNodes.length; i++) {
+      const node = executableNodes[i];
+      this.options.onProgress?.(node.id, i + 1, total);
       const context = {
-        currentBlockId: block.id,
+        currentNodeId: node.id,
         previousResults: new Map(state),
         // Copy current state
         document,
         api: this.options.api
       };
-      const result = await this.executeBlock(block, context);
-      state.set(block.id, result);
+      const result = await this.executeNode(node, context);
+      state.set(node.id, result);
       if (!result.success && this.options.stopOnError) {
         break;
       }
@@ -1553,65 +1574,65 @@ var DocumentExecutor = class {
       startTime,
       endTime,
       totalDuration: endTime.getTime() - startTime.getTime(),
-      blocksExecuted: state.size,
-      blocksSucceeded: Array.from(state.values()).filter((r) => r.success).length,
-      blocksFailed: Array.from(state.values()).filter((r) => !r.success).length
+      nodesExecuted: state.size,
+      nodesSucceeded: Array.from(state.values()).filter((r) => r.success).length,
+      nodesFailed: Array.from(state.values()).filter((r) => !r.success).length
     };
-    return { blocks: state, metadata };
+    return { nodes: state, metadata };
   }
   /**
-   * Execute a single block by ID
+   * Execute a single node by ID
    */
-  async executeSingleBlock(document, blockId) {
+  async executeSingleNode(document, nodeId) {
     const startTime = /* @__PURE__ */ new Date();
     const state = /* @__PURE__ */ new Map();
-    const block = this.findBlockById(document.blocks, blockId);
-    if (!block) {
-      throw new Error(`Block with ID ${blockId} not found`);
+    const node = this.findNodeById(document.nodes || document.blocks, nodeId);
+    if (!node) {
+      throw new Error(`Node with ID ${nodeId} not found`);
     }
-    if (!this.isExecutableBlock(block)) {
-      throw new Error(`Block ${blockId} is not executable`);
+    if (!this.isExecutableNode(node)) {
+      throw new Error(`Node ${nodeId} is not executable`);
     }
-    const previousResults = this.getPreviousResults(document, blockId);
+    const previousResults = this.getPreviousResults(document, nodeId);
     const context = {
-      currentBlockId: blockId,
+      currentNodeId: nodeId,
       previousResults,
       document,
       api: this.options.api
     };
-    const result = await this.executeBlock(block, context);
-    state.set(blockId, result);
+    const result = await this.executeNode(node, context);
+    state.set(nodeId, result);
     const endTime = /* @__PURE__ */ new Date();
     const metadata = {
       startTime,
       endTime,
       totalDuration: endTime.getTime() - startTime.getTime(),
-      blocksExecuted: 1,
-      blocksSucceeded: result.success ? 1 : 0,
-      blocksFailed: result.success ? 0 : 1
+      nodesExecuted: 1,
+      nodesSucceeded: result.success ? 1 : 0,
+      nodesFailed: result.success ? 0 : 1
     };
-    return { blocks: state, metadata };
+    return { nodes: state, metadata };
   }
   /**
-   * Execute a single executable block
+   * Execute a single executable node
    */
-  async executeBlock(block, context) {
+  async executeNode(node, context) {
     const startTime = Date.now();
     try {
-      const tool = this.options.tools[block.tool];
+      const tool = this.options.tools[node.tool];
       if (!tool) {
-        throw new Error(`Tool not found: ${block.tool}`);
+        throw new Error(`Tool not found: ${node.tool}`);
       }
       let validatedParams;
       try {
-        validatedParams = tool.schema.parse(block.parameters);
+        validatedParams = tool.schema.parse(node.parameters);
       } catch (error) {
         if (error instanceof z.ZodError) {
           throw new Error(`Invalid parameters: ${error.errors.map((e) => e.message).join(", ")}`);
         }
         throw error;
       }
-      const content = this.extractContent(block.instructions);
+      const content = this.extractContent(node.instructions);
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error("Execution timeout")), this.options.timeout);
       });
@@ -1640,53 +1661,53 @@ var DocumentExecutor = class {
     }
   }
   /**
-   * Find all executable blocks in document
+   * Find all executable nodes in document
    */
-  findExecutableBlocks(blocks) {
+  findExecutableNodes(nodes) {
     const executable = [];
-    for (const block of blocks) {
-      if (this.isExecutableBlock(block)) {
-        executable.push(block);
+    for (const node of nodes) {
+      if (this.isExecutableNode(node)) {
+        executable.push(node);
       }
-      if ("children" in block && block.children) {
-        executable.push(...this.findExecutableBlocks(block.children));
+      if ("children" in node && node.children) {
+        executable.push(...this.findExecutableNodes(node.children));
       }
     }
     return executable;
   }
   /**
-   * Find a block by ID
+   * Find a node by ID
    */
-  findBlockById(blocks, id) {
-    for (const block of blocks) {
-      if (block.id === id) {
-        return block;
+  findNodeById(nodes, id) {
+    for (const node of nodes) {
+      if (node.id === id) {
+        return node;
       }
-      if ("children" in block && block.children) {
-        const found = this.findBlockById(block.children, id);
+      if ("children" in node && node.children) {
+        const found = this.findNodeById(node.children, id);
         if (found) return found;
       }
     }
     return null;
   }
   /**
-   * Get results from all blocks before the given block
+   * Get results from all nodes before the given node
    */
-  getPreviousResults(document, beforeBlockId) {
+  getPreviousResults(document, beforeNodeId) {
     const results = /* @__PURE__ */ new Map();
-    const executableBlocks = this.findExecutableBlocks(document.blocks);
-    for (const block of executableBlocks) {
-      if (block.id === beforeBlockId) {
+    const executableNodes = this.findExecutableNodes(document.nodes || document.blocks);
+    for (const node of executableNodes) {
+      if (node.id === beforeNodeId) {
         break;
       }
     }
     return results;
   }
   /**
-   * Check if a block is executable
+   * Check if a node is executable
    */
-  isExecutableBlock(block) {
-    return block.type === "function_call" || block.type === "trigger";
+  isExecutableNode(node) {
+    return node.type === "function_call" || node.type === "trigger";
   }
   /**
    * Extract text content from rich content
@@ -1783,69 +1804,69 @@ function validateStructure(document, errors, warnings) {
       message: "Document must have an ID"
     });
   }
-  if (!document.blocks || document.blocks.length === 0) {
+  if (!document.nodes || document.nodes.length === 0) {
     warnings.push({
       type: "warning",
       code: "EMPTY_DOCUMENT",
-      message: "Document has no content blocks"
+      message: "Document has no content nodes"
     });
   }
-  const blockIds = /* @__PURE__ */ new Set();
-  for (const block of traverseBlocks(document.blocks)) {
-    validateBlock(block, blockIds, errors, warnings);
+  const nodeIds = /* @__PURE__ */ new Set();
+  for (const node of traverseNodes(document.nodes)) {
+    validateNode(node, nodeIds, errors, warnings);
   }
 }
-function validateBlock(block, blockIds, errors, warnings) {
-  const blockId = block.id || "unknown";
-  if (block.id && blockIds.has(block.id)) {
+function validateNode(node, nodeIds, errors, warnings) {
+  const nodeId = node.id || "unknown";
+  if (node.id && nodeIds.has(node.id)) {
     errors.push({
       type: "error",
-      code: "DUPLICATE_BLOCK_ID",
-      message: `Duplicate block ID: ${block.id}`,
-      blockId: block.id
+      code: "DUPLICATE_NODE_ID",
+      message: `Duplicate node ID: ${node.id}`,
+      nodeId: node.id
     });
   }
-  if (block.id) {
-    blockIds.add(block.id);
+  if (node.id) {
+    nodeIds.add(node.id);
   }
-  if (!block.id) {
+  if (!node.id) {
     errors.push({
       type: "error",
-      code: "MISSING_BLOCK_ID",
-      message: "Block must have an ID"
+      code: "MISSING_NODE_ID",
+      message: "Node must have an ID"
     });
   }
-  if (!block.type) {
+  if (!node.type) {
     errors.push({
       type: "error",
-      code: "MISSING_BLOCK_TYPE",
-      message: "Block must have a type",
-      blockId
+      code: "MISSING_NODE_TYPE",
+      message: "Node must have a type",
+      nodeId
     });
     return;
   }
-  if (isExecutableBlock(block)) {
-    if (!block.tool) {
+  if (isExecutableNode(node)) {
+    if (!node.tool) {
       errors.push({
         type: "error",
         code: "MISSING_TOOL",
-        message: "Executable block must specify a tool",
-        blockId
+        message: "Executable node must specify a tool",
+        nodeId
       });
     }
-    if (!block.parameters) {
+    if (!node.parameters) {
       warnings.push({
         type: "warning",
         code: "MISSING_PARAMETERS",
-        message: "Executable block has no parameters",
-        blockId
+        message: "Executable node has no parameters",
+        nodeId
       });
     }
   }
 }
 async function validateReferences(document, context, errors, warnings) {
   if (context.validateMention) {
-    const mentions = extractMentions(document.blocks);
+    const mentions = extractMentions(document.nodes);
     for (const mention of mentions) {
       if (!context.validateMention(mention)) {
         errors.push({
@@ -1857,7 +1878,7 @@ async function validateReferences(document, context, errors, warnings) {
     }
   }
   if (context.validateVariable) {
-    const variables = extractVariables(document.blocks);
+    const variables = extractVariables(document.nodes);
     for (const variable of variables) {
       const result = context.validateVariable(variable);
       if (!result.valid) {
@@ -1870,14 +1891,14 @@ async function validateReferences(document, context, errors, warnings) {
     }
   }
   if (context.validateTool) {
-    for (const block of traverseBlocks(document.blocks)) {
-      if (isExecutableBlock(block) && block.tool) {
-        if (!context.validateTool(block.tool)) {
+    for (const node of traverseNodes(document.nodes)) {
+      if (isExecutableNode(node) && node.tool) {
+        if (!context.validateTool(node.tool)) {
           errors.push({
             type: "error",
             code: "INVALID_TOOL",
-            message: `Tool not found: ${block.tool}`,
-            blockId: block.id || "unknown"
+            message: `Tool not found: ${node.tool}`,
+            nodeId: node.id || "unknown"
           });
         }
       }
@@ -1887,7 +1908,7 @@ async function validateReferences(document, context, errors, warnings) {
 function formatValidationIssues(issues) {
   return issues.map((issue) => {
     const prefix = issue.type === "error" ? "\u274C" : "\u26A0\uFE0F";
-    const location = issue.blockId ? ` (block: ${issue.blockId})` : "";
+    const location = issue.nodeId ? ` (node: ${issue.nodeId})` : "";
     return `${prefix} ${issue.message}${location}`;
   }).join("\n");
 }
@@ -2064,20 +2085,20 @@ function interpolateContent(content, resolvedVariables) {
 }
 
 // document/custom-tool-executor.ts
-async function executeCustomTool(toolBlock, options) {
+async function executeCustomTool(toolNode, options) {
   const startTime = Date.now();
-  if (toolBlock.type !== "tool") {
-    throw new Error("Block is not a tool");
+  if (toolNode.type !== "tool") {
+    throw new Error("Node is not a tool");
   }
-  const toolName = toolBlock.props?.title || "Unnamed Tool";
-  const definitionBlocks = toolBlock.children || [];
-  const redeclarationErrors = checkVariableRedeclaration(definitionBlocks);
+  const toolName = toolNode.props?.title || "Unnamed Tool";
+  const definitionNodes = toolNode.children || [];
+  const redeclarationErrors = checkVariableRedeclaration(definitionNodes);
   if (redeclarationErrors.length > 0) {
     throw new Error(
       `Variable redeclaration errors: ${redeclarationErrors.map((e) => e.error).join("; ")}`
     );
   }
-  const variableDefinitions = extractVariableDefinitions(definitionBlocks);
+  const variableDefinitions = extractVariableDefinitions(definitionNodes);
   const resolutionContext = {
     agentContext: options.agentContext,
     inheritedContext: options.inheritedContext
@@ -2086,17 +2107,17 @@ async function executeCustomTool(toolBlock, options) {
   if (resolutionResult.errors) {
     console.warn("Variable resolution errors:", resolutionResult.errors);
   }
-  const blocksWithVariables = applyResolvedVariables(
-    definitionBlocks,
+  const nodesWithVariables = applyResolvedVariables(
+    definitionNodes,
     resolutionResult.variables
   );
-  const interpolatedBlocks = interpolateExecutableBlocks(
-    blocksWithVariables,
+  const interpolatedNodes = interpolateExecutableNodes(
+    nodesWithVariables,
     resolutionResult.variables
   );
   const executionDocument = {
     id: `tool-exec-${Date.now()}`,
-    blocks: interpolatedBlocks
+    nodes: interpolatedNodes
   };
   const executor = new DocumentExecutor(options);
   const report = await executor.execute({
@@ -2106,44 +2127,44 @@ async function executeCustomTool(toolBlock, options) {
   });
   const executionContext = {
     variables: resolutionResult.variables,
-    blocks: report.blocks,
+    nodes: report.nodes,
     metadata: {
       toolName,
       duration: Date.now() - startTime,
-      blocksExecuted: report.metadata.blocksExecuted,
-      blocksSucceeded: report.metadata.blocksSucceeded,
-      blocksFailed: report.metadata.blocksFailed
+      nodesExecuted: report.metadata.nodesExecuted,
+      nodesSucceeded: report.metadata.nodesSucceeded,
+      nodesFailed: report.metadata.nodesFailed
     },
-    toolDefinition: toolBlock
+    toolDefinition: toolNode
   };
   return executionContext;
 }
-function interpolateExecutableBlocks(blocks, resolvedVariables) {
-  return blocks.map((block) => {
-    if (isExecutableBlock(block) && block.instructions) {
+function interpolateExecutableNodes(nodes, resolvedVariables) {
+  return nodes.map((node) => {
+    if (isExecutableNode(node) && node.instructions) {
       const interpolatedContent = interpolateContent(
-        block.instructions,
+        node.instructions,
         resolvedVariables
       );
       return {
-        ...block,
+        ...node,
         instructions: [{
           type: "text",
           text: interpolatedContent
         }]
       };
     }
-    if ("children" in block && block.children) {
+    if ("children" in node && node.children) {
       return {
-        ...block,
-        children: interpolateExecutableBlocks(block.children, resolvedVariables)
+        ...node,
+        children: interpolateExecutableNodes(node.children, resolvedVariables)
       };
     }
-    return block;
+    return node;
   });
 }
 function extractRelevantResult(context, extractionHint) {
-  const results = Array.from(context.blocks.values());
+  const results = Array.from(context.nodes.values());
   const lastSuccess = results.reverse().find((r) => r.success);
   if (lastSuccess) {
     return lastSuccess.data;
@@ -2156,9 +2177,9 @@ function extractRelevantResult(context, extractionHint) {
   };
 }
 function parseCustomTool(document) {
-  for (const block of document.blocks) {
-    if ("type" in block && block.type === "tool") {
-      return block;
+  for (const node of document.nodes) {
+    if ("type" in node && node.type === "tool") {
+      return node;
     }
   }
   return null;
@@ -2166,9 +2187,9 @@ function parseCustomTool(document) {
 
 // document/diff-applier.ts
 import { v4 as uuidv42 } from "uuid";
-function applyDiff(blocks, operations) {
+function applyDiff(nodes, operations) {
   try {
-    let result = [...blocks];
+    let result = [...nodes];
     for (const operation of operations) {
       switch (operation.type) {
         case "edit:attr":
@@ -2199,230 +2220,244 @@ function applyDiff(blocks, operations) {
           throw new Error(`Unknown operation type: ${operation.type}`);
       }
     }
-    return { success: true, blocks: result };
+    return { success: true, nodes: result };
   } catch (error) {
     return {
       success: false,
-      blocks,
+      nodes,
       error: error instanceof Error ? error.message : String(error)
     };
   }
 }
-function applyEditAttr(blocks, op) {
+function applyEditAttr(nodes, op) {
   let found = false;
-  const result = blocks.map((block) => {
-    if (block.id === op.blockId) {
+  const nodeId = op.nodeId || op.blockId;
+  const result = nodes.map((node) => {
+    if (node.id === nodeId) {
       found = true;
       return {
-        ...block,
-        props: { ...block.props || {}, [op.name]: op.value }
+        ...node,
+        props: { ...node.props || {}, [op.name]: op.value }
       };
     }
-    if ("children" in block && block.children && block.children.length > 0) {
-      const updatedChildren = applyEditAttr(block.children, op);
-      if (!found && updatedChildren !== block.children) {
+    if ("children" in node && node.children && node.children.length > 0) {
+      const updatedChildren = applyEditAttr(node.children, op);
+      if (!found && updatedChildren !== node.children) {
         found = true;
       }
-      return { ...block, children: updatedChildren };
+      return { ...node, children: updatedChildren };
     }
-    return block;
+    return node;
   });
   if (!found) {
-    throw new Error(`Block not found: ${op.blockId}`);
+    throw new Error(`Node not found: ${nodeId}`);
   }
   return result;
 }
-function applyEditContent(blocks, op) {
+function applyEditContent(nodes, op) {
   let found = false;
-  const result = blocks.map((block) => {
-    if (block.id === op.blockId) {
+  const nodeId = op.nodeId || op.blockId;
+  const result = nodes.map((node) => {
+    if (node.id === nodeId) {
       found = true;
-      if ("content" in block) {
-        return { ...block, content: op.content };
+      if ("content" in node) {
+        return { ...node, content: op.content };
       } else {
-        throw new Error(`Block ${op.blockId} is not a content block`);
+        throw new Error(`Node ${nodeId} is not a content node`);
       }
     }
-    if ("children" in block && block.children && block.children.length > 0) {
-      const updatedChildren = applyEditContent(block.children, op);
-      if (!found && updatedChildren !== block.children) {
+    if ("children" in node && node.children && node.children.length > 0) {
+      const updatedChildren = applyEditContent(node.children, op);
+      if (!found && updatedChildren !== node.children) {
         found = true;
       }
-      return { ...block, children: updatedChildren };
+      return { ...node, children: updatedChildren };
     }
-    return block;
+    return node;
   });
   if (!found) {
-    throw new Error(`Block not found: ${op.blockId}`);
+    throw new Error(`Node not found: ${nodeId}`);
   }
   return result;
 }
-function applyEditParams(blocks, op) {
+function applyEditParams(nodes, op) {
   let found = false;
-  const result = blocks.map((block) => {
-    if (block.id === op.blockId) {
+  const nodeId = op.nodeId || op.blockId;
+  const result = nodes.map((node) => {
+    if (node.id === nodeId) {
       found = true;
-      if ("parameters" in block) {
-        return { ...block, parameters: op.params };
+      if ("parameters" in node) {
+        return { ...node, parameters: op.params };
       } else {
-        throw new Error(`Block ${op.blockId} is not an executable block`);
+        throw new Error(`Node ${nodeId} is not an executable node`);
       }
     }
-    if ("children" in block && block.children && block.children.length > 0) {
-      const updatedChildren = applyEditParams(block.children, op);
-      if (!found && updatedChildren !== block.children) {
+    if ("children" in node && node.children && node.children.length > 0) {
+      const updatedChildren = applyEditParams(node.children, op);
+      if (!found && updatedChildren !== node.children) {
         found = true;
       }
-      return { ...block, children: updatedChildren };
+      return { ...node, children: updatedChildren };
     }
-    return block;
+    return node;
   });
   if (!found) {
-    throw new Error(`Block not found: ${op.blockId}`);
+    throw new Error(`Node not found: ${nodeId}`);
   }
   return result;
 }
-function applyEditId(blocks, op) {
+function applyEditId(nodes, op) {
   let found = false;
-  const result = blocks.map((block) => {
-    if (block.id === op.blockId) {
+  const nodeId = op.nodeId || op.blockId;
+  const result = nodes.map((node) => {
+    if (node.id === nodeId) {
       found = true;
-      return { ...block, id: op.newId };
+      return { ...node, id: op.newId };
     }
-    if ("children" in block && block.children && block.children.length > 0) {
-      const updatedChildren = applyEditId(block.children, op);
-      if (!found && updatedChildren !== block.children) {
+    if ("children" in node && node.children && node.children.length > 0) {
+      const updatedChildren = applyEditId(node.children, op);
+      if (!found && updatedChildren !== node.children) {
         found = true;
       }
-      return { ...block, children: updatedChildren };
+      return { ...node, children: updatedChildren };
     }
-    return block;
+    return node;
   });
   if (!found) {
-    throw new Error(`Block not found: ${op.blockId}`);
+    throw new Error(`Node not found: ${nodeId}`);
   }
   return result;
 }
-function applyInsert(blocks, op) {
-  const positionCount = [op.atStart, op.atEnd, op.afterBlockId, op.beforeBlockId].filter(Boolean).length;
+function applyInsert(nodes, op) {
+  const afterNodeId = op.afterNodeId || op.afterBlockId;
+  const beforeNodeId = op.beforeNodeId || op.beforeBlockId;
+  const positionCount = [op.atStart, op.atEnd, afterNodeId, beforeNodeId].filter(Boolean).length;
   if (positionCount !== 1) {
     throw new Error("Insert operation must specify exactly one position");
   }
-  const blocksToInsert = op.blocks.map((block) => ({
-    ...block,
-    id: block.id || uuidv42()
+  const nodesToInsert = op.nodes.map((node) => ({
+    ...node,
+    id: node.id || uuidv42()
   }));
   if (op.atStart) {
-    return [...blocksToInsert, ...blocks];
+    return [...nodesToInsert, ...nodes];
   }
   if (op.atEnd) {
-    return [...blocks, ...blocksToInsert];
+    return [...nodes, ...nodesToInsert];
   }
   const result = [];
   let inserted = false;
-  for (const block of blocks) {
-    if (op.beforeBlockId && block.id === op.beforeBlockId) {
-      result.push(...blocksToInsert);
+  for (const node of nodes) {
+    if (beforeNodeId && node.id === beforeNodeId) {
+      result.push(...nodesToInsert);
       inserted = true;
     }
-    result.push(block);
-    if (op.afterBlockId && block.id === op.afterBlockId) {
-      result.push(...blocksToInsert);
+    result.push(node);
+    if (afterNodeId && node.id === afterNodeId) {
+      result.push(...nodesToInsert);
       inserted = true;
     }
   }
   if (!inserted) {
-    throw new Error(`Could not find anchor block for insert operation`);
+    throw new Error(`Could not find anchor node for insert operation`);
   }
   return result;
 }
-function applyDelete(blocks, op) {
-  return blocks.filter((block) => block.id !== op.blockId).map((block) => {
-    if ("children" in block && block.children && block.children.length > 0) {
-      return { ...block, children: applyDelete(block.children, op) };
+function applyDelete(nodes, op) {
+  const nodeId = op.nodeId || op.blockId;
+  return nodes.filter((node) => node.id !== nodeId).map((node) => {
+    if ("children" in node && node.children && node.children.length > 0) {
+      return { ...node, children: applyDelete(node.children, op) };
     }
-    return block;
+    return node;
   });
 }
-function applyReplace(blocks, op) {
-  const replacementBlocks = op.blocks.map((block, index) => {
-    const newId = op.blocks.length === 1 && index === 0 ? op.blockId : block.id || uuidv42();
+function applyReplace(nodes, op) {
+  const nodeId = op.nodeId || op.blockId;
+  const replacementNodes = op.nodes.map((node, index) => {
+    const newId = op.nodes.length === 1 && index === 0 ? nodeId : node.id || uuidv42();
     return {
-      ...block,
+      ...node,
       id: newId
     };
   });
   const result = [];
   let replaced = false;
-  for (const block of blocks) {
-    if (block.id === op.blockId) {
-      result.push(...replacementBlocks);
+  for (const node of nodes) {
+    if (node.id === nodeId) {
+      result.push(...replacementNodes);
       replaced = true;
     } else {
-      result.push(block);
+      result.push(node);
     }
   }
   if (!replaced) {
-    throw new Error(`Could not find block ${op.blockId} to replace`);
+    throw new Error(`Could not find node ${nodeId} to replace`);
   }
   return result;
 }
-function applyMove(blocks, op) {
-  let blocksToMove = [];
-  let remainingBlocks = [];
-  if (op.blockId) {
-    const blockToMove = findBlockById(blocks, op.blockId);
-    if (!blockToMove) {
-      throw new Error(`Block not found: ${op.blockId}`);
+function applyMove(nodes, op) {
+  const nodeId = op.nodeId || op.blockId;
+  const nodeIds = op.nodeIds || op.blockIds;
+  const fromNodeId = op.fromNodeId || op.fromBlockId;
+  const toNodeId = op.toNodeId || op.toBlockId;
+  const afterNodeId = op.afterNodeId || op.afterBlockId;
+  const beforeNodeId = op.beforeNodeId || op.beforeBlockId;
+  let nodesToMove = [];
+  let remainingNodes = [];
+  if (nodeId) {
+    const nodeToMove = findNodeById(nodes, nodeId);
+    if (!nodeToMove) {
+      throw new Error(`Node not found: ${nodeId}`);
     }
-    blocksToMove = [blockToMove];
-    remainingBlocks = blocks.filter((b) => b.id !== op.blockId);
-  } else if (op.blockIds) {
-    const ids = op.blockIds;
+    nodesToMove = [nodeToMove];
+    remainingNodes = nodes.filter((n) => n.id !== nodeId);
+  } else if (nodeIds) {
+    const ids = nodeIds;
     for (const id of ids) {
-      const block = findBlockById(blocks, id);
-      if (!block) {
-        throw new Error(`Block not found: ${id}`);
+      const node = findNodeById(nodes, id);
+      if (!node) {
+        throw new Error(`Node not found: ${id}`);
       }
-      blocksToMove.push(block);
+      nodesToMove.push(node);
     }
-    remainingBlocks = blocks.filter((b) => !ids.includes(b.id));
-  } else if (op.fromBlockId && op.toBlockId) {
-    const fromIndex = blocks.findIndex((b) => b.id === op.fromBlockId);
-    const toIndex = blocks.findIndex((b) => b.id === op.toBlockId);
+    remainingNodes = nodes.filter((n) => !ids.includes(n.id));
+  } else if (fromNodeId && toNodeId) {
+    const fromIndex = nodes.findIndex((n) => n.id === fromNodeId);
+    const toIndex = nodes.findIndex((n) => n.id === toNodeId);
     if (fromIndex === -1) {
-      throw new Error(`Block not found: ${op.fromBlockId}`);
+      throw new Error(`Node not found: ${fromNodeId}`);
     }
     if (toIndex === -1) {
-      throw new Error(`Block not found: ${op.toBlockId}`);
+      throw new Error(`Node not found: ${toNodeId}`);
     }
     const startIndex = Math.min(fromIndex, toIndex);
     const endIndex = Math.max(fromIndex, toIndex);
-    blocksToMove = blocks.slice(startIndex, endIndex + 1);
-    remainingBlocks = [
-      ...blocks.slice(0, startIndex),
-      ...blocks.slice(endIndex + 1)
+    nodesToMove = nodes.slice(startIndex, endIndex + 1);
+    remainingNodes = [
+      ...nodes.slice(0, startIndex),
+      ...nodes.slice(endIndex + 1)
     ];
   } else {
-    throw new Error("Move operation must specify blockId, blockIds, or fromBlockId/toBlockId");
+    throw new Error("Move operation must specify nodeId, nodeIds, or fromNodeId/toNodeId");
   }
   const insertOp = {
     type: "insert",
-    afterBlockId: op.afterBlockId,
-    beforeBlockId: op.beforeBlockId,
+    afterNodeId,
+    beforeNodeId,
     atStart: op.atStart,
     atEnd: op.atEnd,
-    blocks: blocksToMove
+    nodes: nodesToMove
   };
-  return applyInsert(remainingBlocks, insertOp);
+  return applyInsert(remainingNodes, insertOp);
 }
-function findBlockById(blocks, id) {
-  for (const block of blocks) {
-    if (block.id === id) {
-      return block;
+function findNodeById(nodes, id) {
+  for (const node of nodes) {
+    if (node.id === id) {
+      return node;
     }
-    if ("children" in block && block.children) {
-      const found = findBlockById(block.children, id);
+    if ("children" in node && node.children) {
+      const found = findNodeById(node.children, id);
       if (found) return found;
     }
   }
@@ -2433,8 +2468,8 @@ function findBlockById(blocks, id) {
 function blockNoteToIdyllic(blockNoteBlocks) {
   return blockNoteBlocks.map(convertBlockNoteBlock);
 }
-function idyllicToBlockNote(idyllicBlocks) {
-  return idyllicBlocks.map(convertIdyllicBlock);
+function idyllicToBlockNote(idyllicNodes) {
+  return idyllicNodes.map(convertIdyllicNode);
 }
 function convertBlockNoteBlock(bnBlock) {
   const { id, type, props, content, children } = bnBlock;
@@ -2469,7 +2504,7 @@ function convertBlockNoteBlock(bnBlock) {
     return {
       id,
       type: "data",
-      // Tables map to data blocks in Idyllic
+      // Tables map to data nodes in Idyllic
       content: [{ type: "text", text: JSON.stringify(content) }],
       props: {
         title: "Table",
@@ -2508,16 +2543,16 @@ function convertBlockNoteBlock(bnBlock) {
   };
   const idyllicType = typeMapping[type] || "paragraph";
   const idyllicContent = Array.isArray(content) && content.length > 0 ? convertBlockNoteContent(content) : [{ type: "text", text: "" }];
-  const block = {
+  const node = {
     id,
     type: idyllicType,
     content: idyllicContent,
     children: children.map(convertBlockNoteBlock)
   };
   if (Object.keys(props).length > 0) {
-    block.props = { ...props };
+    node.props = { ...props };
   }
-  return block;
+  return node;
 }
 function convertBlockNoteContent(content) {
   return content.map((item) => {
@@ -2577,63 +2612,63 @@ function mapMentionType(bnType) {
       return "custom";
   }
 }
-function convertIdyllicBlock(block) {
-  const { id } = block;
-  if (isExecutableBlock(block)) {
-    if (block.type === "trigger") {
+function convertIdyllicNode(node) {
+  const { id } = node;
+  if (isExecutableNode(node)) {
+    if (node.type === "trigger") {
       return {
         id,
         type: "trigger",
         props: {
-          trigger: block.tool,
-          params: JSON.stringify(block.parameters),
-          enabled: block.metadata?.enabled ?? true,
-          modelId: block.metadata?.modelId
+          trigger: node.tool,
+          params: JSON.stringify(node.parameters),
+          enabled: node.metadata?.enabled ?? true,
+          modelId: node.metadata?.modelId
         },
-        content: block.instructions && block.instructions.length > 0 ? convertIdyllicContent(block.instructions) : [{ type: "text", text: "", styles: {} }],
+        content: node.instructions && node.instructions.length > 0 ? convertIdyllicContent(node.instructions) : [{ type: "text", text: "", styles: {} }],
         children: []
       };
     }
-    if (block.type === "function_call") {
+    if (node.type === "function_call") {
       return {
         id,
         type: "functionCall",
         props: {
-          tool: block.tool,
-          params: JSON.stringify(block.parameters),
-          response: block.result?.data ? JSON.stringify(block.result.data) : "",
-          error: block.result?.error ? JSON.stringify(block.result.error) : "",
-          modelId: block.metadata?.modelId
+          tool: node.tool,
+          params: JSON.stringify(node.parameters),
+          response: node.result?.data ? JSON.stringify(node.result.data) : "",
+          error: node.result?.error ? JSON.stringify(node.result.error) : "",
+          modelId: node.metadata?.modelId
         },
-        content: block.instructions && block.instructions.length > 0 ? convertIdyllicContent(block.instructions) : [{ type: "text", text: "", styles: {} }],
+        content: node.instructions && node.instructions.length > 0 ? convertIdyllicContent(node.instructions) : [{ type: "text", text: "", styles: {} }],
         children: []
       };
     }
   }
-  const contentBlock = block;
-  if (contentBlock.type === "tool") {
+  const contentNode = node;
+  if (contentNode.type === "tool") {
     return {
       id,
       type: "tool",
       props: {
-        title: contentBlock.props?.title || "Tool",
-        icon: contentBlock.props?.icon || "\u{1F527}",
-        toolDefinition: contentBlock.props?.toolDefinition || ""
+        title: contentNode.props?.title || "Tool",
+        icon: contentNode.props?.icon || "\u{1F527}",
+        toolDefinition: contentNode.props?.toolDefinition || ""
       },
       content: [],
-      children: contentBlock.children ? contentBlock.children.map(convertIdyllicBlock) : []
+      children: contentNode.children ? contentNode.children.map(convertIdyllicNode) : []
     };
   }
-  if (contentBlock.type === "data" && contentBlock.props?.originalType === "table") {
+  if (contentNode.type === "data" && contentNode.props?.originalType === "table") {
     try {
-      const firstContent = contentBlock.content[0];
+      const firstContent = contentNode.content[0];
       const tableData = JSON.parse(
         firstContent && firstContent.type === "text" ? firstContent.text : "{}"
       );
       return {
         id,
         type: "table",
-        props: { textColor: contentBlock.props.textColor || "default" },
+        props: { textColor: contentNode.props.textColor || "default" },
         content: tableData,
         children: []
       };
@@ -2650,39 +2685,39 @@ function convertIdyllicBlock(block) {
     "code": "codeBlock",
     "separator": "separator",
     "data": "paragraph"
-    // Generic data blocks become paragraphs
+    // Generic data nodes become paragraphs
   };
-  const bnType = typeMapping[contentBlock.type] || "paragraph";
+  const bnType = typeMapping[contentNode.type] || "paragraph";
   const bnProps = {};
   if (bnType !== "separator" && bnType !== "codeBlock") {
-    bnProps.textColor = contentBlock.props?.textColor || "default";
-    bnProps.textAlignment = contentBlock.props?.textAlignment || "left";
-    bnProps.backgroundColor = contentBlock.props?.backgroundColor || "default";
+    bnProps.textColor = contentNode.props?.textColor || "default";
+    bnProps.textAlignment = contentNode.props?.textAlignment || "left";
+    bnProps.backgroundColor = contentNode.props?.backgroundColor || "default";
   }
-  if (contentBlock.type === "heading") {
-    bnProps.level = contentBlock.props?.level || 1;
-  } else if (contentBlock.type === "checklistItem") {
-    bnProps.checked = contentBlock.props?.checked || false;
-  } else if (contentBlock.type === "code") {
-    bnProps.language = contentBlock.props?.language || "text";
-  } else if (contentBlock.type === "separator") {
-    bnProps.text = contentBlock.props?.text || "";
+  if (contentNode.type === "heading") {
+    bnProps.level = contentNode.props?.level || 1;
+  } else if (contentNode.type === "checklistItem") {
+    bnProps.checked = contentNode.props?.checked || false;
+  } else if (contentNode.type === "code") {
+    bnProps.language = contentNode.props?.language || "text";
+  } else if (contentNode.type === "separator") {
+    bnProps.text = contentNode.props?.text || "";
   }
-  if (contentBlock.props) {
-    Object.keys(contentBlock.props).forEach((key) => {
+  if (contentNode.props) {
+    Object.keys(contentNode.props).forEach((key) => {
       if (!bnProps[key]) {
-        bnProps[key] = contentBlock.props[key];
+        bnProps[key] = contentNode.props[key];
       }
     });
   }
-  const bnContent = convertIdyllicContent(contentBlock.content);
+  const bnContent = convertIdyllicContent(contentNode.content);
   const finalContent = bnContent.length > 0 ? bnContent : [{ type: "text", text: "", styles: {} }];
   return {
     id,
     type: bnType,
     props: bnProps,
     content: finalContent,
-    children: contentBlock.children ? contentBlock.children.map(convertIdyllicBlock) : []
+    children: contentNode.children ? contentNode.children.map(convertIdyllicNode) : []
   };
 }
 function convertIdyllicContent(content) {
@@ -2861,17 +2896,17 @@ ${availableTools.map((t) => `- ${t}`).join("\n")}`);
   const instructions = [];
   const customTools = [];
   const triggers = [];
-  for (const block of agent.blocks) {
-    if (block.type === "tool") {
-      const title = block.props?.title || "Untitled Tool";
+  for (const node of agent.nodes) {
+    if (node.type === "tool") {
+      const title = node.props?.title || "Untitled Tool";
       customTools.push(`Custom tool: ${title}`);
-    } else if (block.type === "trigger") {
-      const trigger = block.props?.trigger;
+    } else if (node.type === "trigger") {
+      const trigger = node.props?.trigger;
       if (trigger) {
         triggers.push(`Trigger: ${trigger}`);
       }
-    } else if ("content" in block && block.content) {
-      const text = extractTextFromBlock(block);
+    } else if ("content" in node && node.content) {
+      const text = extractTextFromBlock(node);
       if (text) {
         instructions.push(text);
       }
@@ -2896,12 +2931,12 @@ ${instructions.join("\n\n")}`);
 When working with documents, use the Idyllic XML format.`);
   return sections.join("\n");
 }
-function extractTextFromBlock(block) {
-  if (!("content" in block) || !block.content) {
+function extractTextFromBlock(node) {
+  if (!("content" in node) || !node.content) {
     return "";
   }
   const texts = [];
-  for (const content of block.content) {
+  for (const content of node.content) {
     if (isTextContent(content)) {
       texts.push(content.text);
     }
@@ -3163,9 +3198,9 @@ var Agent = class {
         execute: async (params) => {
           console.log(`\u{1F527} Executing tool: ${name}`);
           const context = {
-            currentBlockId: uuidv43(),
+            currentNodeId: uuidv43(),
             previousResults: /* @__PURE__ */ new Map(),
-            document: { id: this.program.id, blocks: this.program.blocks }
+            document: { id: this.program.id, nodes: this.program.nodes }
           };
           try {
             const content = params.content || "";
@@ -3372,13 +3407,17 @@ export {
   extractVariableDefinitions,
   extractVariables,
   findBlock,
+  findNode,
   formatValidationIssues,
   fromAzureFunctionName,
   getExecutableBlocks,
+  getExecutableNodes,
   idyllicToBlockNote,
   interpolateContent,
   isContentBlock,
+  isContentNode,
   isExecutableBlock,
+  isExecutableNode,
   isMention,
   isTextContent,
   isVariable,
@@ -3393,6 +3432,7 @@ export {
   testIsomorphism,
   toAzureFunctionName,
   traverseBlocks,
+  traverseNodes,
   validateDocument,
   validateToolName
 };

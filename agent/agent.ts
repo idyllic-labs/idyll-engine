@@ -17,7 +17,7 @@ import {
 import type { AgentDocument, Block } from '../document/ast';
 import { ActivityMemory } from "./memory";
 import { ToolRegistry } from "../document/tool-registry";
-import { BlockExecutionContext } from "../document/execution-types";
+import { NodeExecutionContext, BlockExecutionContext } from "../document/execution-types";
 import { v4 as uuidv4 } from "uuid";
 import { buildDetailedSystemPrompt } from "./system-prompt";
 import { extractCustomTools } from "./custom-tools";
@@ -90,10 +90,10 @@ export class Agent {
           console.log(`🔧 Executing tool: ${name}`);
 
           // Create execution context
-          const context: BlockExecutionContext = {
-            currentBlockId: uuidv4(),
+          const context: NodeExecutionContext = {
+            currentNodeId: uuidv4(),
             previousResults: new Map(),
-            document: { id: this.program.id, blocks: this.program.blocks },
+            document: { id: this.program.id, nodes: this.program.nodes } as any,
           };
 
           try {

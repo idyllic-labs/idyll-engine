@@ -8,7 +8,7 @@
 export * from './document/ast';
 
 // Document parsing and serialization
-export { parseXmlToAst, serializeAstToXml, parseXML, serializeToXML } from './document/parser-grammar';
+export { parseXmlToAst, serializeAstToXml } from './document/parser-grammar';
 
 // Document execution
 export { DocumentExecutor } from './document/executor';
@@ -51,9 +51,8 @@ export * from './document/custom-tool-executor';
 export { applyDiff } from './document/diff-applier';
 export type { DiffResult } from './document/diff-applier';
 
-// BlockNote converter
-export { blockNoteToIdyllic, idyllicToBlockNote, testIsomorphism } from './document/blocknote-converter';
-export type { BlockNoteBlock, BlockNoteContent, BlockNoteTableContent } from './document/blocknote-converter';
+// BlockNote integration (optional - import from '@idyllic-labs/idyll-engine/integrations/blocknote')
+// Removed from main exports to keep core engine editor-agnostic
 
 // Agent system
 export { Agent } from './agent/agent';

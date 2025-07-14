@@ -1,11 +1,11 @@
 /**
  * Diff Application Logic for Idyll Documents
  * 
- * Applies edit operations to document blocks with proper error handling.
+ * Applies edit operations to document nodes with proper error handling.
  */
 
 import { 
-  Block, 
+  Node, 
   EditOperation, 
   EditAttrOperation,
   EditContentOperation,
@@ -14,23 +14,22 @@ import {
   InsertOperation,
   DeleteOperation,
   ReplaceOperation,
-  MoveOperation,
-  RichContent 
+  MoveOperation
 } from './ast';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface DiffResult {
   success: boolean;
-  blocks?: Block[];
+  nodes?: Node[];
   error?: string;
 }
 
 /**
- * Apply a list of edit operations to document blocks
+ * Apply a list of edit operations to document nodes
  */
-export function applyDiff(blocks: Block[], operations: EditOperation[]): DiffResult {
+export function applyDiff(nodes: Node[], operations: EditOperation[]): DiffResult {
   try {
-    let result = [...blocks];
+    let result = [...nodes];
 
     for (const operation of operations) {
       switch (operation.type) {
@@ -71,11 +70,11 @@ export function applyDiff(blocks: Block[], operations: EditOperation[]): DiffRes
       }
     }
 
-    return { success: true, blocks: result };
+    return { success: true, nodes: result };
   } catch (error) {
     return { 
       success: false, 
-      blocks,
+      nodes,
       error: error instanceof Error ? error.message : String(error) 
     };
   }
@@ -85,28 +84,28 @@ export function applyDiff(blocks: Block[], operations: EditOperation[]): DiffRes
 // Operation Application Functions
 // ============================================
 
-function applyEditAttr(blocks: Block[], op: EditAttrOperation): Block[] {
+function applyEditAttr(nodes: Node[], op: EditAttrOperation): Node[] {
   let found = false;
   
-  const result = blocks.map(block => {
-    if (block.id === op.blockId) {
+  const result = nodes.map(node => {
+    if (node.id === op.blockId) {
       found = true;
       return { 
-        ...block, 
-        props: { ...((block as any).props || {}), [op.name]: op.value } 
+        ...node, 
+        props: { ...((node as any).props || {}), [op.name]: op.value } 
       };
     }
     
-    // Search in children for nested blocks (even though we prefer flat structure)
-    if ('children' in block && block.children && block.children.length > 0) {
-      const updatedChildren = applyEditAttr(block.children, op);
-      if (!found && updatedChildren !== block.children) {
+    // Search in children for nested nodes (even though we prefer flat structure)
+    if ('children' in node && node.children && node.children.length > 0) {
+      const updatedChildren = applyEditAttr(node.children, op);
+      if (!found && updatedChildren !== node.children) {
         found = true;
       }
-      return { ...block, children: updatedChildren };
+      return { ...node, children: updatedChildren };
     }
     
-    return block;
+    return node;
   });
   
   if (!found) {
@@ -116,29 +115,29 @@ function applyEditAttr(blocks: Block[], op: EditAttrOperation): Block[] {
   return result;
 }
 
-function applyEditContent(blocks: Block[], op: EditContentOperation): Block[] {
+function applyEditContent(nodes: Node[], op: EditContentOperation): Node[] {
   let found = false;
   
-  const result = blocks.map(block => {
-    if (block.id === op.blockId) {
+  const result = nodes.map(node => {
+    if (node.id === op.blockId) {
       found = true;
-      // Only content blocks have content property
-      if ('content' in block) {
-        return { ...block, content: op.content };
+      // Only content nodes have content property
+      if ('content' in node) {
+        return { ...node, content: op.content };
       } else {
-        throw new Error(`Block ${op.blockId} is not a content block`);
+        throw new Error(`Block ${op.blockId} is not a content node`);
       }
     }
     
-    if ('children' in block && block.children && block.children.length > 0) {
-      const updatedChildren = applyEditContent(block.children, op);
-      if (!found && updatedChildren !== block.children) {
+    if ('children' in node && node.children && node.children.length > 0) {
+      const updatedChildren = applyEditContent(node.children, op);
+      if (!found && updatedChildren !== node.children) {
         found = true;
       }
-      return { ...block, children: updatedChildren };
+      return { ...node, children: updatedChildren };
     }
     
-    return block;
+    return node;
   });
   
   if (!found) {
@@ -148,29 +147,29 @@ function applyEditContent(blocks: Block[], op: EditContentOperation): Block[] {
   return result;
 }
 
-function applyEditParams(blocks: Block[], op: EditParamsOperation): Block[] {
+function applyEditParams(nodes: Node[], op: EditParamsOperation): Node[] {
   let found = false;
   
-  const result = blocks.map(block => {
-    if (block.id === op.blockId) {
+  const result = nodes.map(node => {
+    if (node.id === op.blockId) {
       found = true;
-      // Only executable blocks have parameters
-      if ('parameters' in block) {
-        return { ...block, parameters: op.params };
+      // Only executable nodes have parameters
+      if ('parameters' in node) {
+        return { ...node, parameters: op.params };
       } else {
-        throw new Error(`Block ${op.blockId} is not an executable block`);
+        throw new Error(`Block ${op.blockId} is not an executable node`);
       }
     }
     
-    if ('children' in block && block.children && block.children.length > 0) {
-      const updatedChildren = applyEditParams(block.children, op);
-      if (!found && updatedChildren !== block.children) {
+    if ('children' in node && node.children && node.children.length > 0) {
+      const updatedChildren = applyEditParams(node.children, op);
+      if (!found && updatedChildren !== node.children) {
         found = true;
       }
-      return { ...block, children: updatedChildren };
+      return { ...node, children: updatedChildren };
     }
     
-    return block;
+    return node;
   });
   
   if (!found) {
@@ -180,24 +179,24 @@ function applyEditParams(blocks: Block[], op: EditParamsOperation): Block[] {
   return result;
 }
 
-function applyEditId(blocks: Block[], op: EditIdOperation): Block[] {
+function applyEditId(nodes: Node[], op: EditIdOperation): Node[] {
   let found = false;
   
-  const result = blocks.map(block => {
-    if (block.id === op.blockId) {
+  const result = nodes.map(node => {
+    if (node.id === op.blockId) {
       found = true;
-      return { ...block, id: op.newId };
+      return { ...node, id: op.newId };
     }
     
-    if ('children' in block && block.children && block.children.length > 0) {
-      const updatedChildren = applyEditId(block.children, op);
-      if (!found && updatedChildren !== block.children) {
+    if ('children' in node && node.children && node.children.length > 0) {
+      const updatedChildren = applyEditId(node.children, op);
+      if (!found && updatedChildren !== node.children) {
         found = true;
       }
-      return { ...block, children: updatedChildren };
+      return { ...node, children: updatedChildren };
     }
     
-    return block;
+    return node;
   });
   
   if (!found) {
@@ -207,7 +206,7 @@ function applyEditId(blocks: Block[], op: EditIdOperation): Block[] {
   return result;
 }
 
-function applyInsert(blocks: Block[], op: InsertOperation): Block[] {
+function applyInsert(nodes: Node[], op: InsertOperation): Node[] {
   // Validate position specification
   const positionCount = [op.atStart, op.atEnd, op.afterBlockId, op.beforeBlockId]
     .filter(Boolean).length;
@@ -223,25 +222,25 @@ function applyInsert(blocks: Block[], op: InsertOperation): Block[] {
   }));
 
   if (op.atStart) {
-    return [...blocksToInsert, ...blocks];
+    return [...blocksToInsert, ...nodes];
   }
 
   if (op.atEnd) {
-    return [...blocks, ...blocksToInsert];
+    return [...nodes, ...blocksToInsert];
   }
 
-  const result: Block[] = [];
+  const result: Node[] = [];
   let inserted = false;
 
-  for (const block of blocks) {
-    if (op.beforeBlockId && block.id === op.beforeBlockId) {
+  for (const node of nodes) {
+    if (op.beforeBlockId && node.id === op.beforeBlockId) {
       result.push(...blocksToInsert);
       inserted = true;
     }
 
-    result.push(block);
+    result.push(node);
 
-    if (op.afterBlockId && block.id === op.afterBlockId) {
+    if (op.afterBlockId && node.id === op.afterBlockId) {
       result.push(...blocksToInsert);
       inserted = true;
     }
@@ -254,19 +253,19 @@ function applyInsert(blocks: Block[], op: InsertOperation): Block[] {
   return result;
 }
 
-function applyDelete(blocks: Block[], op: DeleteOperation): Block[] {
+function applyDelete(nodes: Node[], op: DeleteOperation): Node[] {
   // Remove from top level and recursively from children
-  return blocks
-    .filter(block => block.id !== op.blockId)
-    .map(block => {
-      if ('children' in block && block.children && block.children.length > 0) {
-        return { ...block, children: applyDelete(block.children, op) };
+  return nodes
+    .filter(node => node.id !== op.blockId)
+    .map(node => {
+      if ('children' in node && node.children && node.children.length > 0) {
+        return { ...node, children: applyDelete(node.children, op) };
       }
-      return block;
+      return node;
     });
 }
 
-function applyReplace(blocks: Block[], op: ReplaceOperation): Block[] {
+function applyReplace(nodes: Node[], op: ReplaceOperation): Node[] {
   // When replacing with a single block, preserve the original ID
   const replacementBlocks = op.blocks.map((block, index) => {
     const newId = op.blocks.length === 1 && index === 0 ? op.blockId : (block.id || uuidv4());
@@ -276,15 +275,15 @@ function applyReplace(blocks: Block[], op: ReplaceOperation): Block[] {
     };
   });
 
-  const result: Block[] = [];
+  const result: Node[] = [];
   let replaced = false;
 
-  for (const block of blocks) {
-    if (block.id === op.blockId) {
+  for (const node of nodes) {
+    if (node.id === op.blockId) {
       result.push(...replacementBlocks);
       replaced = true;
     } else {
-      result.push(block);
+      result.push(node);
     }
   }
 
@@ -295,34 +294,33 @@ function applyReplace(blocks: Block[], op: ReplaceOperation): Block[] {
   return result;
 }
 
-function applyMove(blocks: Block[], op: MoveOperation): Block[] {
+function applyMove(nodes: Node[], op: MoveOperation): Node[] {
   // Determine what blocks to move
-  let blocksToMove: Block[] = [];
-  let remainingBlocks: Block[] = [];
+  let blocksToMove: Node[] = [];
+  let remainingNodes: Node[] = [];
 
   if (op.blockId) {
     // Single block move
-    const blockToMove = findBlockById(blocks, op.blockId);
+    const blockToMove = findNodeById(nodes, op.blockId);
     if (!blockToMove) {
       throw new Error(`Block not found: ${op.blockId}`);
     }
     blocksToMove = [blockToMove];
-    remainingBlocks = blocks.filter(b => b.id !== op.blockId);
+    remainingNodes = nodes.filter(n => n.id !== op.blockId);
   } else if (op.blockIds) {
     // Multiple blocks move
-    const ids = op.blockIds;
-    for (const id of ids) {
-      const block = findBlockById(blocks, id);
+    for (const id of op.blockIds) {
+      const block = findNodeById(nodes, id);
       if (!block) {
         throw new Error(`Block not found: ${id}`);
       }
       blocksToMove.push(block);
     }
-    remainingBlocks = blocks.filter(b => !ids.includes(b.id));
+    remainingNodes = nodes.filter(n => !op.blockIds!.includes(n.id));
   } else if (op.fromBlockId && op.toBlockId) {
     // Range move
-    const fromIndex = blocks.findIndex(b => b.id === op.fromBlockId);
-    const toIndex = blocks.findIndex(b => b.id === op.toBlockId);
+    const fromIndex = nodes.findIndex(n => n.id === op.fromBlockId);
+    const toIndex = nodes.findIndex(n => n.id === op.toBlockId);
     
     if (fromIndex === -1) {
       throw new Error(`Block not found: ${op.fromBlockId}`);
@@ -334,10 +332,10 @@ function applyMove(blocks: Block[], op: MoveOperation): Block[] {
     const startIndex = Math.min(fromIndex, toIndex);
     const endIndex = Math.max(fromIndex, toIndex);
     
-    blocksToMove = blocks.slice(startIndex, endIndex + 1);
-    remainingBlocks = [
-      ...blocks.slice(0, startIndex),
-      ...blocks.slice(endIndex + 1)
+    blocksToMove = nodes.slice(startIndex, endIndex + 1);
+    remainingNodes = [
+      ...nodes.slice(0, startIndex),
+      ...nodes.slice(endIndex + 1)
     ];
   } else {
     throw new Error('Move operation must specify blockId, blockIds, or fromBlockId/toBlockId');
@@ -353,21 +351,21 @@ function applyMove(blocks: Block[], op: MoveOperation): Block[] {
     blocks: blocksToMove
   };
 
-  return applyInsert(remainingBlocks, insertOp);
+  return applyInsert(remainingNodes, insertOp);
 }
 
 // ============================================
 // Helper Functions
 // ============================================
 
-function findBlockById(blocks: Block[], id: string): Block | null {
-  for (const block of blocks) {
-    if (block.id === id) {
-      return block;
+function findNodeById(nodes: Node[], id: string): Node | null {
+  for (const node of nodes) {
+    if (node.id === id) {
+      return node;
     }
     
-    if ('children' in block && block.children) {
-      const found = findBlockById(block.children, id);
+    if ('children' in node && node.children) {
+      const found = findNodeById(node.children, id);
       if (found) return found;
     }
   }

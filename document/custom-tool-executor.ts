@@ -6,15 +6,16 @@
  */
 
 import type { 
-  Block, 
-  ContentBlock, 
-  ExecutableBlock, 
+  Node,
+  ContentNode,
+  ExecutableNode,
   IdyllDocument 
 } from './ast';
-import { isExecutableBlock, getExecutableBlocks } from './ast';
+import { isExecutableNode, getExecutableNodes } from './ast';
 import type { 
   ToolExecutionContext, 
   ExecutionOptions,
+  NodeExecutionResult,
   BlockExecutionResult 
 } from './execution-types';
 import { DocumentExecutor } from './executor';
@@ -39,26 +40,26 @@ export interface CustomToolExecutionOptions<TApi = any> extends ExecutionOptions
 }
 
 /**
- * Execute a custom tool defined as a ContentBlock
+ * Execute a custom tool defined as a ContentNode
  */
 export async function executeCustomTool<TApi = any>(
-  toolBlock: ContentBlock,
+  toolNode: ContentNode,
   options: CustomToolExecutionOptions<TApi>
 ): Promise<ToolExecutionContext> {
   const startTime = Date.now();
   
-  // Validate it's a tool block
-  if (toolBlock.type !== 'tool') {
-    throw new Error('Block is not a tool');
+  // Validate it's a tool node
+  if (toolNode.type !== 'tool') {
+    throw new Error('Node is not a tool');
   }
   
-  const toolName = (toolBlock.props?.title as string) || 'Unnamed Tool';
+  const toolName = (toolNode.props?.title as string) || 'Unnamed Tool';
   
-  // Get tool definition blocks (children)
-  const definitionBlocks = toolBlock.children || [];
+  // Get tool definition nodes (children)
+  const definitionNodes = toolNode.children || [];
   
   // Check for variable redeclaration errors
-  const redeclarationErrors = checkVariableRedeclaration(definitionBlocks);
+  const redeclarationErrors = checkVariableRedeclaration(definitionNodes);
   if (redeclarationErrors.length > 0) {
     throw new Error(
       `Variable redeclaration errors: ${redeclarationErrors.map(e => e.error).join('; ')}`
@@ -66,7 +67,7 @@ export async function executeCustomTool<TApi = any>(
   }
   
   // Extract variable definitions
-  const variableDefinitions = extractVariableDefinitions(definitionBlocks);
+  const variableDefinitions = extractVariableDefinitions(definitionNodes);
   
   // Resolve variables
   const resolutionContext: VariableResolutionContext = {
@@ -80,22 +81,22 @@ export async function executeCustomTool<TApi = any>(
     console.warn('Variable resolution errors:', resolutionResult.errors);
   }
   
-  // Apply resolved variables to blocks
-  const blocksWithVariables = applyResolvedVariables(
-    definitionBlocks,
+  // Apply resolved variables to nodes
+  const nodesWithVariables = applyResolvedVariables(
+    definitionNodes,
     resolutionResult.variables
   );
   
-  // Interpolate content in executable blocks
-  const interpolatedBlocks = interpolateExecutableBlocks(
-    blocksWithVariables,
+  // Interpolate content in executable nodes
+  const interpolatedNodes = interpolateExecutableNodes(
+    nodesWithVariables,
     resolutionResult.variables
   );
   
   // Create a document for execution
   const executionDocument: IdyllDocument = {
     id: `tool-exec-${Date.now()}`,
-    blocks: interpolatedBlocks,
+    nodes: interpolatedNodes,
   };
   
   // Execute using DocumentExecutor
@@ -109,56 +110,56 @@ export async function executeCustomTool<TApi = any>(
   // Build execution context
   const executionContext: ToolExecutionContext = {
     variables: resolutionResult.variables,
-    blocks: report.blocks,
+    nodes: report.nodes,
     metadata: {
       toolName,
       duration: Date.now() - startTime,
-      blocksExecuted: report.metadata.blocksExecuted,
-      blocksSucceeded: report.metadata.blocksSucceeded,
-      blocksFailed: report.metadata.blocksFailed,
+      nodesExecuted: report.metadata.nodesExecuted,
+      nodesSucceeded: report.metadata.nodesSucceeded,
+      nodesFailed: report.metadata.nodesFailed,
     },
-    toolDefinition: toolBlock,
+    toolDefinition: toolNode,
   };
   
   return executionContext;
 }
 
 /**
- * Interpolate variables in executable block content
+ * Interpolate variables in executable node content
  */
-function interpolateExecutableBlocks(
-  blocks: Block[],
+function interpolateExecutableNodes(
+  nodes: Node[],
   resolvedVariables: Map<string, string>
-): Block[] {
-  return blocks.map(block => {
-    if (isExecutableBlock(block) && block.instructions) {
+): Node[] {
+  return nodes.map(node => {
+    if (isExecutableNode(node) && node.instructions) {
       // Interpolate the instructions to create the content string
       const interpolatedContent = interpolateContent(
-        block.instructions,
+        node.instructions,
         resolvedVariables
       );
       
-      // Return a modified block with interpolated content
+      // Return a modified node with interpolated content
       // Note: We're modifying the instructions to be a simple text content
       // In a real implementation, we might want to preserve the structure
       return {
-        ...block,
+        ...node,
         instructions: [{
           type: 'text',
           text: interpolatedContent,
         }],
-      } as ExecutableBlock;
+      } as ExecutableNode;
     }
     
     // Recursively handle children
-    if ('children' in block && block.children) {
+    if ('children' in node && node.children) {
       return {
-        ...block,
-        children: interpolateExecutableBlocks(block.children, resolvedVariables),
+        ...node,
+        children: interpolateExecutableNodes(node.children, resolvedVariables),
       };
     }
     
-    return block;
+    return node;
   });
 }
 
@@ -171,7 +172,7 @@ export function extractRelevantResult(
   extractionHint?: string
 ): unknown {
   // Get the last successful result by default
-  const results = Array.from(context.blocks.values());
+  const results = Array.from(context.nodes.values());
   const lastSuccess = results
     .reverse()
     .find(r => r.success);
@@ -195,10 +196,10 @@ export function extractRelevantResult(
 /**
  * Parse custom tool from document
  */
-export function parseCustomTool(document: IdyllDocument): ContentBlock | null {
-  for (const block of document.blocks) {
-    if ('type' in block && block.type === 'tool') {
-      return block as ContentBlock;
+export function parseCustomTool(document: IdyllDocument): ContentNode | null {
+  for (const node of document.nodes) {
+    if ('type' in node && node.type === 'tool') {
+      return node as ContentNode;
     }
   }
   return null;

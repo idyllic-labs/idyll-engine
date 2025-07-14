@@ -6,8 +6,8 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import {
-  parseXML,
-  serializeToXML,
+  parseXmlToAst,
+  serializeAstToXml,
   validateDocument,
   DocumentExecutor,
   type ValidationContext,
@@ -24,12 +24,12 @@ describe('Idyll Engine', () => {
         </document>
       `;
 
-      const doc = parseXML(xml);
+      const doc = parseXmlToAst(xml);
       
       expect(doc.id).toBe('test-doc');
-      expect(doc.blocks).toHaveLength(2);
-      expect(doc.blocks[0].type).toBe('paragraph');
-      expect(doc.blocks[1].type).toBe('heading');
+      expect(doc.nodes).toHaveLength(2);
+      expect(doc.nodes[0].type).toBe('paragraph');
+      expect(doc.nodes[1].type).toBe('heading');
     });
 
     it('should parse function call blocks', () => {
@@ -42,8 +42,8 @@ describe('Idyll Engine', () => {
         </document>
       `;
 
-      const doc = parseXML(xml);
-      const block = doc.blocks[0];
+      const doc = parseXmlToAst(xml);
+      const block = doc.nodes[0];
       
       expect(block.type).toBe('function_call');
       if (block.type === 'function_call') {
@@ -66,8 +66,8 @@ describe('Idyll Engine', () => {
         </document>
       `;
 
-      const doc = parseXML(xml);
-      const block = doc.blocks[0];
+      const doc = parseXmlToAst(xml);
+      const block = doc.nodes[0];
       
       expect(block.type).toBe('trigger');
       if (block.type === 'trigger') {
@@ -89,8 +89,8 @@ describe('Idyll Engine', () => {
         </document>
       `;
 
-      const doc = parseXML(xml);
-      const paragraph = doc.blocks[0];
+      const doc = parseXmlToAst(xml);
+      const paragraph = doc.nodes[0];
       
       if (paragraph.type === 'paragraph') {
         const content = paragraph.content;
@@ -118,7 +118,7 @@ describe('Idyll Engine', () => {
     it('should serialize document back to XML', () => {
       const doc = {
         id: 'test-doc',
-        blocks: [
+        nodes: [
           {
             id: 'p1',
             type: 'paragraph' as const,
@@ -137,7 +137,7 @@ describe('Idyll Engine', () => {
         ]
       };
 
-      const xml = serializeToXML(doc);
+      const xml = serializeAstToXml(doc);
       
       expect(xml).toContain('<document id="test-doc">');
       expect(xml).toContain('<p id="p1">Hello world</p>'); // Updated to match actual serialization
@@ -149,7 +149,7 @@ describe('Idyll Engine', () => {
 
   describe('Document Validation', () => {
     it('should validate document structure', async () => {
-      const doc = parseXML(`
+      const doc = parseXmlToAst(`
         <document>
           <p>Valid paragraph</p>
           <fncall idyll-tool="test:hello">
@@ -165,7 +165,7 @@ describe('Idyll Engine', () => {
     });
 
     it('should validate tool references when context provided', async () => {
-      const doc = parseXML(`
+      const doc = parseXmlToAst(`
         <document>
           <fncall idyll-tool="unknown:tool">
             <params><![CDATA[{}]]></params>
@@ -185,7 +185,7 @@ describe('Idyll Engine', () => {
     });
 
     it('should validate mentions and variables', async () => {
-      const doc = parseXML(`
+      const doc = parseXmlToAst(`
         <document>
           <p>
             Hello <mention id="invalid-user" type="user" label="@unknown"/>
@@ -229,7 +229,7 @@ describe('Idyll Engine', () => {
       });
 
       // Parse document
-      const doc = parseXML(`
+      const doc = parseXmlToAst(`
         <document>
           <p>Let me greet you</p>
           <fncall idyll-tool="test:greet">
@@ -247,12 +247,12 @@ describe('Idyll Engine', () => {
       });
       
       // Check execution report structure
-      expect(result.metadata.blocksExecuted).toBe(1);
-      expect(result.metadata.blocksSucceeded).toBe(1);
-      expect(result.metadata.blocksFailed).toBe(0);
+      expect(result.metadata.nodesExecuted).toBe(1);
+      expect(result.metadata.nodesSucceeded).toBe(1);
+      expect(result.metadata.nodesFailed).toBe(0);
       
       // Check execution results
-      const executions = Array.from(result.blocks.values());
+      const executions = Array.from(result.nodes.values());
       expect(executions).toHaveLength(1);
       expect(executions[0].success).toBe(true);
       expect(executions[0].data).toMatchObject({
@@ -274,7 +274,7 @@ describe('Idyll Engine', () => {
         })
       });
 
-      const doc = parseXML(`
+      const doc = parseXmlToAst(`
         <document>
           <fncall idyll-tool="test:fail">
             <params><![CDATA[{}]]></params>
@@ -290,11 +290,11 @@ describe('Idyll Engine', () => {
       });
       
       // Check that execution completed but with failures
-      expect(result.metadata.blocksExecuted).toBe(1);
-      expect(result.metadata.blocksSucceeded).toBe(0);
-      expect(result.metadata.blocksFailed).toBe(1);
+      expect(result.metadata.nodesExecuted).toBe(1);
+      expect(result.metadata.nodesSucceeded).toBe(0);
+      expect(result.metadata.nodesFailed).toBe(1);
       
-      const executions = Array.from(result.blocks.values());
+      const executions = Array.from(result.nodes.values());
       expect(executions[0].success).toBe(false);
       expect(executions[0].error?.message).toContain('Tool execution failed');
     });
@@ -330,14 +330,14 @@ describe('Idyll Engine', () => {
         </document>
       `;
 
-      const doc = parseXML(xml);
+      const doc = parseXmlToAst(xml);
       
       // Verify structure
       expect(doc.id).toBe('complex-doc');
-      expect(doc.blocks).toHaveLength(4); // Updated expected count based on actual parsing
+      expect(doc.nodes).toHaveLength(4); // Updated expected count based on actual parsing
       
       // Check nested list structure
-      const list = doc.blocks[3];
+      const list = doc.nodes[3];
       if (list.type === 'list' && list.children) {
         expect(list.children).toHaveLength(2);
         const nestedItem = list.children[1];
@@ -350,7 +350,7 @@ describe('Idyll Engine', () => {
       }
       
       // Check trigger (note: parser currently treats enabled="false" as true)
-      const trigger = doc.blocks[3]; // Adjusted index
+      const trigger = doc.nodes[3]; // Adjusted index
       if (trigger.type === 'trigger') {
         expect(trigger.metadata?.enabled).toBe(true); // Current parser behavior
         expect(trigger.tool).toBe('webhook:receive');

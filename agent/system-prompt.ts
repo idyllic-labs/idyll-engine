@@ -4,11 +4,11 @@
  * Converts AgentDocument to a proper system prompt with:
  * - Background context
  * - Tool definitions
- * - Custom instructions from blocks
+ * - Custom instructions from nodes
  */
 
-import { AgentDocument, Block, isExecutableBlock, isTextContent } from '../document/ast';
-import { serializeToXML } from '../document/parser-grammar';
+import { AgentDocument, Node, isExecutableNode, isTextContent } from '../document/ast';
+import { serializeAstToXml } from '../document/parser-grammar';
 
 /**
  * Build system prompt from agent document
@@ -35,20 +35,20 @@ export function buildSystemPrompt(agent: AgentDocument, availableTools: string[]
   const customTools: string[] = [];
   const triggers: string[] = [];
   
-  for (const block of agent.blocks) {
-    if (block.type === 'tool') {
+  for (const node of agent.nodes) {
+    if (node.type === 'tool') {
       // Extract tool definition
-      const title = block.props?.title as string || 'Untitled Tool';
+      const title = node.props?.title as string || 'Untitled Tool';
       customTools.push(`Custom tool: ${title}`);
-    } else if (block.type === 'trigger') {
+    } else if (node.type === 'trigger') {
       // Note triggers
-      const trigger = block.props?.trigger as string;
+      const trigger = node.props?.trigger as string;
       if (trigger) {
         triggers.push(`Trigger: ${trigger}`);
       }
-    } else if ('content' in block && block.content) {
+    } else if ('content' in node && node.content) {
       // Extract text content as instructions
-      const text = extractTextFromBlock(block);
+      const text = extractTextFromBlock(node);
       if (text) {
         instructions.push(text);
       }
@@ -77,16 +77,16 @@ export function buildSystemPrompt(agent: AgentDocument, availableTools: string[]
 }
 
 /**
- * Extract plain text from a block
+ * Extract plain text from a node
  */
-function extractTextFromBlock(block: Block): string {
-  if (!('content' in block) || !block.content) {
+function extractTextFromBlock(node: Node): string {
+  if (!('content' in node) || !node.content) {
     return '';
   }
   
   const texts: string[] = [];
   
-  for (const content of block.content) {
+  for (const content of node.content) {
     if (isTextContent(content)) {
       texts.push(content.text);
     }
