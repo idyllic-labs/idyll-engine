@@ -5,8 +5,6 @@
  * from complex tool execution contexts.
  */
 
-import { generateText } from 'ai';
-import { getModel } from './model-provider';
 import { Message } from 'ai';
 import { ToolExecutionContext } from '../document/execution-types';
 

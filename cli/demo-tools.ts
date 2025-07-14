@@ -73,15 +73,18 @@ export function createDemoTools() {
       description: 'Generates random numbers',
       execute: async (params) => {
         const numbers: number[] = [];
-        for (let i = 0; i < params.count; i++) {
-          numbers.push(Math.floor(Math.random() * (params.max - params.min + 1)) + params.min);
+        const count = params.count ?? 1;
+        const min = params.min ?? 1;
+        const max = params.max ?? 100;
+        for (let i = 0; i < count; i++) {
+          numbers.push(Math.floor(Math.random() * (max - min + 1)) + min);
         }
         
         return {
           numbers,
-          min: params.min,
-          max: params.max,
-          count: params.count,
+          min,
+          max,
+          count,
         };
       },
     }),

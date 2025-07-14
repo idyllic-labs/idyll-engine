@@ -66,7 +66,7 @@ export function extractCustomTools(
           
           // Create custom tool block for execution
           const customToolBlock: ContentBlock = {
-            id: context.blockId || 'custom-tool-exec',
+            id: context.currentBlockId || 'custom-tool-exec',
             type: 'tool',
             content: [],
             children: definitionBlocks,

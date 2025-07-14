@@ -11,7 +11,7 @@
 import { readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import chalk from 'chalk';
-import { parseXML, serializeToXML, validateDocument, executeDocument } from '../index';
+import { parseXML, serializeToXML, validateDocument } from '../index';
 import type { ToolResolver, ToolExecutor, ToolResult, ValidationContext, DocumentExecutionContext } from '../types';
 
 // Mock tool resolver for testing
@@ -209,7 +209,12 @@ async function executeCommand(filePath: string) {
       }
     };
     
-    // Execute
+    // Execute - OLD API, needs updating
+    console.log(chalk.yellow('\n⚠️  Execute command uses old API and needs updating'));
+    console.log(chalk.gray('   Use the DocumentExecutor class instead'));
+    return;
+    
+    /*
     const result = await executeDocument(document, context, {
       toolResolver: mockToolResolver,
       toolExecutor: mockToolExecutor,
@@ -225,14 +230,15 @@ async function executeCommand(filePath: string) {
     
     if (result.summary.errors.length > 0) {
       console.log(chalk.red('\nErrors:'));
-      result.summary.errors.forEach(({ blockId, error }) => {
+      result.summary.errors.forEach(({ blockId, error }: any) => {
         console.log(chalk.red(`  Block ${blockId}: ${error.message}`));
       });
     }
     
     console.log(chalk.blue('\nUpdated document:'));
     const xml = serializeToXML(result.document);
-    console.log(xml);
+    */
+    // console.log(xml);
     
   } catch (error) {
     console.error(chalk.red('Execution error:'), error);

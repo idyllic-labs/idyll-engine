@@ -6,7 +6,19 @@
       "Bash(bun run:*)",
       "Bash(mv:*)",
       "Bash(git commit:*)",
-      "Bash(npm test)"
+      "Bash(npm test)",
+      "Bash(npm run build:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(bun install:*)",
+      "Bash(npm publish:*)",
+      "Bash(source .env)",
+      "Bash(bun publish:*)",
+      "Bash(npm view:*)",
+      "Bash(bun test:*)",
+      "Bash(bun:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }

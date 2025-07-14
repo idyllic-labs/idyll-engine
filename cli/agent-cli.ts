@@ -17,7 +17,7 @@ import { Message } from "ai";
 import { z } from "zod";
 import path from "path";
 import fs from "fs/promises";
-import { checkModelConfig } from "../agent/model-provider";
+import { createAzure } from "@ai-sdk/azure";
 
 // Create readline interface
 const rl = readline.createInterface({ input, output });
@@ -112,22 +112,32 @@ const commands = {
 
       const agentDoc = parsed as AgentDocument;
 
-      // Check model configuration
-      const modelCheck = checkModelConfig(agentDoc.model);
-      if (!modelCheck.valid) {
-        console.log(chalk.yellow(`⚠️  ${modelCheck.message}`));
-        console.log(
-          chalk.gray(
-            "   You can still load the agent but chat will fail without API keys."
-          )
-        );
+      // Check for Azure configuration
+      if (!process.env.AZURE_OPENAI_INSTANCE_NAME || !process.env.AZURE_OPENAI_API_KEY) {
+        console.log(chalk.yellow('\n⚠️  Azure OpenAI Configuration Required'));
+        console.log(chalk.gray('   Set your Azure OpenAI credentials:'));
+        console.log(chalk.gray('   export AZURE_OPENAI_INSTANCE_NAME=your-instance'));
+        console.log(chalk.gray('   export AZURE_OPENAI_API_KEY=your-key'));
+        console.log(chalk.gray('   '));
+        console.log(chalk.gray('   Agent loaded but cannot chat without Azure credentials.'));
+        return;
       }
 
-      // Create agent with demo tools
+      // Create Azure instance
+      const azure = createAzure({
+        resourceName: process.env.AZURE_OPENAI_INSTANCE_NAME,
+        apiKey: process.env.AZURE_OPENAI_API_KEY,
+        apiVersion: "2024-12-01-preview",
+      });
+
+      // Create model instance (using dev dependency)
+      const model = azure(agentDoc.model || 'gpt-4') as any;
+
+      // Create agent with the elegant v2 API
       currentAgent = new Agent({
-        document: agentDoc,
+        program: agentDoc,
+        model,
         tools: createDemoTools(),
-        memoryLimit: 20,
       });
 
       currentAgentPath = agentPath;
@@ -324,7 +334,7 @@ async function main() {
         if (cmd === "/load") {
           await (handler as any)(args);
         } else {
-          handler();
+          await (handler as any)();
         }
       } else {
         console.log(chalk.red(`Unknown command: ${cmd}`));

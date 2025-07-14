@@ -154,32 +154,23 @@ export async function resolveVariables(
   definitions: VariableDefinition[],
   context: VariableResolutionContext
 ): Promise<VariableResolutionResult> {
-  // Try to use AI resolver if available
-  try {
-    // Dynamic import to avoid circular dependencies
-    const { resolveVariablesWithAI } = await import('../agent/ai-variable-resolver');
-    return await resolveVariablesWithAI(definitions, context);
-  } catch (error) {
-    console.warn('AI variable resolver not available, using mock resolution');
-    
-    // Fall back to mock resolution
-    const variables = new Map<string, string>();
-    const errors: Array<{ variable: string; error: string }> = [];
-    
-    for (const def of definitions) {
-      try {
-        const resolvedValue = await mockResolveVariable(def, context);
-        variables.set(def.name, resolvedValue);
-      } catch (error) {
-        errors.push({
-          variable: def.name,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
+  // Use mock resolution (AI resolution removed - model should be provided externally if needed)
+  const variables = new Map<string, string>();
+  const errors: Array<{ variable: string; error: string }> = [];
+  
+  for (const def of definitions) {
+    try {
+      const resolvedValue = await mockResolveVariable(def, context);
+      variables.set(def.name, resolvedValue);
+    } catch (error) {
+      errors.push({
+        variable: def.name,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
-    
-    return { variables, errors: errors.length > 0 ? errors : undefined };
   }
+  
+  return { variables, errors: errors.length > 0 ? errors : undefined };
 }
 
 /**

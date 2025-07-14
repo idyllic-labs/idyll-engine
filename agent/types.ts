@@ -2,21 +2,22 @@
  * Agent types for the idyll-engine
  */
 
-import { Message, CoreTool, LanguageModelUsage } from 'ai';
+import { Message, CoreTool, LanguageModelUsage, LanguageModel } from 'ai';
 import { AgentDocument } from '../document/ast';
 import type { ToolRegistry } from '../document/tool-registry';
 
 /**
- * Agent configuration
+ * Agent definition - the parsed AST of an <agent> document
+ */
+export type AgentDefinition = AgentDocument;
+
+/**
+ * Agent configuration - elegant and focused
  */
 export interface AgentConfig {
-  document?: AgentDocument;
-  systemPrompt?: string; // XML string alternative to document
-  agentId?: string; // Required when using systemPrompt
-  agentName?: string; // Required when using systemPrompt
-  model?: string; // Required when using systemPrompt
-  tools: ToolRegistry;
-  memoryLimit?: number;
+  program: AgentDefinition;  // The agent program
+  model: LanguageModel;      // AI runtime
+  tools: ToolRegistry;       // Tool runtime
 }
 
 /**

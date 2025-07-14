@@ -18,8 +18,8 @@ import { parseXML, serializeToXML } from "../document/parser-grammar";
 import { DocumentExecutor } from "../document/executor";
 import { createToolRegistry, defineTool } from "../document/tool-registry";
 import type { BlockExecutionContext } from "../document/execution-types";
+import type { IdyllDocument } from "../document/ast";
 import { generateText } from "ai";
-import { gpt_4_1 } from "../../../app/lib/ai/vercel-ai";
 
 // =============================================================================
 // STEP 1: Define our tools
@@ -55,13 +55,8 @@ const tools = createToolRegistry({
     description: "Generates text based on a prompt",
     execute: async (params, content, context) => {
       console.log(context);
-      const result = await generateText({
-        model: gpt_4_1,
-        prompt: content,
-      });
-      return {
-        text: result.text,
-      };
+      // Model should be provided externally
+      throw new Error('AI model not configured - pass a model when using AI features');
     },
   }),
 
@@ -249,14 +244,14 @@ async function main() {
   const document = parseXML(documentXML);
 
   // Type guard to ensure we have a regular document
-  if ("type" in document && document.type !== "document") {
+  if ("type" in document && document.type === "agent") {
     console.error("❌ Expected a regular document");
     return;
   }
 
   console.log("✅ Document parsed successfully");
-  console.log(`   - ID: ${document.id}`);
-  console.log(`   - Blocks: ${document.blocks.length}`);
+  console.log(`   - ID: ${(document as any).id}`);
+  console.log(`   - Blocks: ${(document as any).blocks?.length || 0}`);
   console.log("");
 
   // -----------------------------
@@ -297,7 +292,7 @@ async function main() {
    */
   const report = await executor.execute({
     mode: "document",
-    document,
+    document: document as IdyllDocument,
     options: { tools }, // Tools are passed again here for the execution context
   });
 

@@ -5,21 +5,21 @@
  * but without the database dependencies and app-specific logic.
  */
 
-import { generateText, streamText, Message, CoreTool } from "ai";
+import { generateText, streamText, Message, CoreTool, LanguageModel } from "ai";
 import {
   AgentConfig,
+  AgentDefinition,
   AgentContext,
   AgentExecuteOptions,
   AgentExecuteResult,
   AgentActivity,
 } from "./types";
-import type { AgentDocument } from '../document/ast';
+import type { AgentDocument, Block } from '../document/ast';
 import { ActivityMemory } from "./memory";
 import { ToolRegistry } from "../document/tool-registry";
 import { BlockExecutionContext } from "../document/execution-types";
 import { v4 as uuidv4 } from "uuid";
 import { buildDetailedSystemPrompt } from "./system-prompt";
-import { getModel } from "./model-provider";
 import { extractCustomTools } from "./custom-tools";
 import { mergeToolRegistries } from "../document/tool-registry";
 import { compressToolResponse } from "./response-compressor";
@@ -32,42 +32,22 @@ import {
  * Agent class for executing conversations with tools
  */
 export class Agent {
-  private config: AgentConfig;
+  private program: AgentDefinition;
+  private model: LanguageModel;
+  private tools: ToolRegistry;
   private memory: ActivityMemory;
   private context: AgentContext;
   private aiTools: Record<string, CoreTool> = {};
   private currentMessages: Message[] = [];
 
   constructor(config: AgentConfig) {
-    // Handle XML string system prompt if provided
-    if (config.systemPrompt && !config.document) {
-      // Parse XML to create document blocks
-      const { parseXML } = require('../document/parser-grammar');
-      try {
-        const parsedDoc = parseXML(config.systemPrompt);
-        // Create a minimal AgentDocument with required fields
-        config.document = {
-          type: 'agent',
-          id: config.agentId || 'agent-' + Date.now(),
-          name: config.agentName || 'Assistant',
-          model: config.model || 'gpt-4',
-          blocks: parsedDoc.blocks || []
-        } as AgentDocument;
-      } catch (error) {
-        throw new Error(`Failed to parse system prompt XML: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-    
-    if (!config.document) {
-      throw new Error('Either document or systemPrompt must be provided');
-    }
+    this.program = config.program;
+    this.model = config.model;
+    this.tools = config.tools;
 
-    this.config = config;
-    this.memory = new ActivityMemory(config.memoryLimit);
+    this.memory = new ActivityMemory();
     this.context = {
-      agentId: config.document.id,
-      agentName: config.document.name,
-      model: config.document.model,
+      agentId: this.program.id,
       activities: [],
     };
 
@@ -79,10 +59,10 @@ export class Agent {
    * Initialize tools for AI SDK
    */
   private initializeTools() {
-    // Extract custom tools from agent document if available
-    const customTools = this.config.document ? extractCustomTools(
-      this.config.document,
-      this.config.tools,
+    // Extract custom tools from agent program
+    const customTools = extractCustomTools(
+      this.program,
+      this.tools,
       () => {
         // Get the last user message as agent context
         const lastUserMessage = this.currentMessages
@@ -92,10 +72,10 @@ export class Agent {
           ? lastUserMessage.content
           : JSON.stringify(lastUserMessage?.content || "");
       }
-    ) : {};
+    );
 
     // Merge base tools with custom tools
-    const allTools = mergeToolRegistries(this.config.tools, customTools);
+    const allTools = mergeToolRegistries(this.tools, customTools);
 
     // Convert all tools to AI SDK format
     for (const [name, tool] of Object.entries(allTools)) {
@@ -113,7 +93,7 @@ export class Agent {
           const context: BlockExecutionContext = {
             currentBlockId: uuidv4(),
             previousResults: new Map(),
-            document: this.config.document || { id: 'unknown', blocks: [] },
+            document: { id: this.program.id, blocks: this.program.blocks },
           };
 
           try {
@@ -183,7 +163,7 @@ export class Agent {
     const toolNames = Object.keys(this.aiTools);
 
     return buildDetailedSystemPrompt(
-      this.config.document || { type: 'agent', id: 'unknown', blocks: [] },
+      this.program,
       toolNames,
       memoryContext
     );
@@ -212,7 +192,7 @@ export class Agent {
       });
 
       const result = await generateText({
-        model: getModel(this.config.document?.model || this.config.model || 'gpt-4'),
+        model: this.model,
         system: this.getSystemPrompt(),
         messages,
         tools: this.aiTools,
@@ -280,7 +260,7 @@ export class Agent {
       });
 
       const result = await streamText({
-        model: getModel(this.config.document?.model || this.config.model || 'gpt-4'),
+        model: this.model,
         system: this.getSystemPrompt(),
         messages,
         tools: this.aiTools,

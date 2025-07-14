@@ -59,9 +59,9 @@ export type { BlockNoteBlock, BlockNoteContent, BlockNoteTableContent } from './
 export { Agent } from './agent/agent';
 export { ActivityMemory } from './agent/memory';
 export { buildSystemPrompt, buildDetailedSystemPrompt } from './agent/system-prompt';
-export { getModel, checkModelConfig } from './agent/model-provider';
 export type { 
-  AgentConfig, 
+  AgentConfig,
+  AgentDefinition,
   AgentContext, 
   AgentActivity,
   AgentExecuteOptions,

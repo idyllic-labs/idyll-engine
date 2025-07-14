@@ -110,7 +110,9 @@ function parseDocument(filePath: string): void {
         break;
       default:
         console.log(pc.blue('📄 Regular Document'));
-        console.log(`  Blocks: ${document.blocks.length}`);
+        if ('blocks' in document) {
+          console.log(`  Blocks: ${(document as IdyllDocument).blocks.length}`);
+        }
     }
   }
   
@@ -153,8 +155,8 @@ async function executeDocument(
   const content = readFileSync(filePath, 'utf-8');
   const parsed = parseXML(content);
   
-  // Check if it's a regular document (no type field means it's a regular document)
-  if ('type' in parsed && parsed.type !== 'document') {
+  // Check if it's a regular document
+  if ('type' in parsed && parsed.type === 'diff') {
     console.error(pc.red('Error: Only regular documents can be executed'));
     process.exit(1);
   }

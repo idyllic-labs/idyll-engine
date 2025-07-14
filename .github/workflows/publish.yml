@@ -1,0 +1,70 @@
+name: Publish to GitHub Packages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'package.json'
+      - 'src/**'
+      - 'document/**'
+      - 'agent/**'
+      - 'cli/**'
+      - 'index.ts'
+      - 'types.ts'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+          
+      - name: Install dependencies
+        run: bun install
+        
+      - name: Run tests
+        run: bun test
+        
+      - name: Build package
+        run: bun run build
+        
+      - name: Setup .npmrc for GitHub Packages
+        run: |
+          echo "@idyllic-labs:registry=https://npm.pkg.github.com" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
+          
+      - name: Get package version
+        id: package-version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+        
+      - name: Check if version exists
+        id: version-check
+        continue-on-error: true
+        run: |
+          if npm view @idyllic-labs/idyll-engine@${{ steps.package-version.outputs.version }} version 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Publish to GitHub Packages
+        if: steps.version-check.outputs.exists != 'true'
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI: true
+          
+      - name: Version already exists
+        if: steps.version-check.outputs.exists == 'true'
+        run: echo "::notice::Version ${{ steps.package-version.outputs.version }} already exists, skipping publish"
