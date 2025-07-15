@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://idyllic.so/idyll-engine-banner.png" alt="Idyll Engine" width="100%" />
+  <img src="https://github.com/idyllic-labs/idyll-engine/blob/main/assets/banner.png" alt="Idyll Engine" width="100%" />
 </div>
 
 # Idyll Engine
