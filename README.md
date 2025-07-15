@@ -1,24 +1,55 @@
+<div align="center">
+  <img src="https://idyllic.so/idyll-engine-banner.png" alt="Idyll Engine" width="100%" />
+</div>
+
 # Idyll Engine
 
 > A context-building execution engine for AI-native programming
+
+<div align="center">
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![Node](https://img.shields.io/badge/Node-18.0+-green.svg)](https://nodejs.org/)
 
+</div>
+
 Idyll Engine reimagines programming for the AI era. Instead of functions that transform data and produce side effects, Idyll functions build context that AI interprets to determine relevance. This paradigm shift enables a new form of programming where execution is exploration and results are contextual understanding.
+
+**[Read our Manifesto →](MANIFESTO.md)**
 
 ## Table of Contents
 
-- [Philosophy](#philosophy-context-driven-computation)
+- [Philosophy: Context-Driven Computation](#philosophy-context-driven-computation)
+  - [The Paradigm Shift](#the-paradigm-shift)
+  - [Homoiconicity: Code as Living Documents](#homoiconicity-code-as-living-documents)
+- [Computational Insights](#computational-insights)
+- [How This Changes AI Programming](#how-this-changes-ai-programming)
+  - [The String-Based Intelligence Model](#the-string-based-intelligence-model)
+  - [Why This Isn't Another Automation Tool](#why-this-isnt-another-automation-tool)
 - [Core Features](#core-features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+  - [Context-Building Example](#context-building-example)
+  - [AI Agent with Custom Functions](#ai-agent-with-custom-functions)
+- [Why This Matters](#why-this-matters)
 - [Grammar and Language Design](#grammar-and-language-design)
+  - [Why XML?](#why-xml)
+  - [The Execution Layer](#the-execution-layer)
+  - [Grammar Structure (EBNF-style)](#grammar-structure-ebnf-style)
+  - [Key Grammar Insights](#key-grammar-insights)
+- [Technical Details](#technical-details)
+  - [Function Naming](#function-naming)
+- [CLI Usage](#cli-usage)
 - [API Reference](#api-reference)
 - [Examples](#examples)
-- [Contributing](#contributing)
+- [Development](#development)
+- [Documentation](#documentation)
+- [The Vision: Community-Driven Intelligence Construction](#the-vision-community-driven-intelligence-construction)
+- [Community](#community)
 - [License](#license)
+- [Acknowledgments](#acknowledgments)
+- [Citation](#citation)
 
 ## Philosophy: Context-Driven Computation
 
@@ -66,6 +97,79 @@ Idyllic: Patterns emerge from context interpretation
 ### From Imperative to Declarative Intent
 Traditional: "How to compute"  
 Idyllic: "What context to build"
+
+### The String-Based Intelligence Model
+
+Just as humans resolve everything into the visual domain in working memory, Idyllic resolves all values into rich, composable strings with references and pointers. The context becomes the working memory.
+
+#### Augmented Strings: Beyond Plain Text
+
+Our strings aren't just text - they're **augmented with semantic markers**:
+
+```xml
+<content>
+  Analyze <mention:document id="doc123">the architecture doc</mention:document>
+  and compare with <mention:user id="usr456">John's</mention:user> proposal
+  focusing on <variable name="aspect" prompt="What aspect to analyze"/> 
+  <annotation confidence="0.8">This seems related to last week's discussion</annotation>
+</content>
+```
+
+These augmentations create a **rich semantic graph** within the text:
+- **Mentions** create explicit references to entities (documents, users, agents)
+- **Variables** are prompts for contextual resolution, not static values
+- **Annotations** add metadata and confidence layers
+- **Links** preserve external references while maintaining readability
+
+#### The Execution Engine: Context-Driven Semantics
+
+We layer a lightweight execution engine on top of XML that adds **context-driven semantics**:
+
+1. **Sequential Context Building** - Each function call adds to accumulated context
+2. **Variable Resolution** - AI resolves variables based on accumulated context, not static scope
+3. **Error Resilience** - Failed functions still contribute partial context
+4. **Semantic Preservation** - The meaning is in the text + augmentations, not in types
+
+#### Combinators for Intelligence
+
+The real power comes from **functional combinators** that work with context:
+
+```xml
+<!-- Combinator: Sequential exploration -->
+<function title="Deep Analysis">
+  <fncall fn="explore:surface">Initial exploration</fncall>
+  <fncall fn="explore:patterns">Find patterns in previous context</fncall>
+  <fncall fn="explore:anomalies">What doesn't fit the patterns?</fncall>
+</function>
+
+<!-- Combinator: Parallel perspectives -->
+<function title="Multi-Perspective Analysis">
+  <fncall fn="analyze:technical">Technical implications</fncall>
+  <fncall fn="analyze:business">Business impact</fncall>
+  <fncall fn="analyze:user">User experience angle</fncall>
+  <fncall fn="synthesize:perspectives">Combine all viewpoints</fncall>
+</function>
+```
+
+These aren't traditional function compositions - they're **context combinators** that build understanding.
+
+This design choice is fundamental:
+- **Variables in natural language** rather than rigid JSON schemas
+- **Intent expression** through string interpolation: `"Find breakthroughs in <variable name='field'/>"`
+- **Context accumulation** means programs move forward even through errors
+- **Non-brittle by design** - unlike automation tools, this is an experimental programming paradigm
+
+We deliberately chose expressiveness over efficiency. JSON schemas are faster but they cage intelligence. String interpolation with variables lets you experiment with AI capabilities at the speed of thought. You can always optimize later once patterns emerge.
+
+### Why This Isn't Another Automation Tool
+
+Traditional automation breaks at the first unexpected input. Idyllic embraces the messiness of intelligence:
+- Functions that error still contribute context
+- Partial results are valid results 
+- The AI interprets accumulated context to recover and continue
+- Each execution teaches you something about the problem space
+
+This isn't about building reliable workflows - it's about **constructing intelligence** through experimentation.
 
 ## Core Features
 
@@ -228,8 +332,10 @@ The choice of XML is deliberate and strategic:
 Idyllic adds a light execution layer with context-driven semantics on top of XML. This enables:
 
 - **Explorative Context Engineering** - Build up context iteratively through function calls
-- **Intelligence Design** - Create patterns of context accumulation that guide AI behavior
+- **Intelligence Design** - Create patterns of context accumulation that guide AI behavior  
 - **Semantic Clarity** - Each element has clear meaning in the context-building process
+- **Augmented Strings** - Text enriched with mentions, variables, and annotations
+- **Context Combinators** - Functions that compose to build understanding, not just transform data
 
 ### Grammar Structure (EBNF-style)
 
@@ -364,18 +470,21 @@ bun run agent examples/demo-agent.xml
 Explore our comprehensive examples:
 
 ### Basic Examples
+
 - `document-simple.xml` - Basic document structure
 - `executable-demo.xml` - Document with function calls
 - `agent-simple.xml` - Simple agent definition
 - `demo-agent.xml` - Agent with custom functions
 
 ### Advanced Examples
+
 - `instrumentation-demo.ts` - Execution hooks and timing
 - `custom-function-instrumentation-demo.ts` - Multi-level context building
 - `recursion-test.ts` - Understanding linear execution model
 - `function-execution-demo.ts` - Direct function execution
 
 Run any TypeScript example:
+
 ```bash
 bun run examples/instrumentation-demo.ts
 ```
@@ -401,8 +510,42 @@ bun run agent
 
 ## Documentation
 
+- [Manifesto](./MANIFESTO.md) - Our philosophy and vision for AI programming
 - [Document Execution Specification](./DOCUMENT_EXECUTION_SPEC.md) - Complete execution model
 - [Agent System](./agent/README.md) - Agent architecture details
+
+## The Vision: Community-Driven Intelligence Construction
+
+Imagine a world where complex AI capabilities emerge from a community-contributed registry of context-building functions:
+
+```text
+community-functions/
+├── analysis/
+│   ├── code-understanding    # Analyze codebases through context
+│   ├── sentiment-evolution   # Track sentiment across context
+│   └── causal-extraction    # Extract cause-effect relationships
+├── synthesis/
+│   ├── cross-domain-insights # Connect ideas across domains
+│   ├── analogy-discovery    # Find patterns in different contexts
+│   └── thesis-construction  # Build arguments from evidence
+└── specialized/
+    ├── legal-precedent-analysis
+    ├── medical-differential-diagnosis
+    └── architecture-migration-planning
+```
+
+The key insight: **You're not building agents - you're constructing intelligence** by giving AI composable context-building blocks.
+
+Traditional approach to complex task: Breaks. Too brittle. Too many edge cases.
+
+Idyllic approach: AI naturally composes functions to build understanding:
+
+- Each function adds context
+- AI determines relevance and relationships
+- Complex intelligence emerges from simple primitives
+- No fragile control flow needed
+
+This is the future we're building towards.
 
 ## Community
 
@@ -415,7 +558,7 @@ bun run agent
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
-```
+```text
 Copyright 2024 Idyllic Labs
 
 Licensed under the Apache License, Version 2.0 (the "License");
