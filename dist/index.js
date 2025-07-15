@@ -1535,9 +1535,69 @@ function serializeEditOperation(operation) {
 
 // document/executor.ts
 import { z } from "zod";
-var DocumentExecutor = class {
+
+// document/abstract-function-executor.ts
+var AbstractFunctionExecutor = class {
+  hooks;
+  constructor(hooks) {
+    this.hooks = hooks || {};
+  }
+  /**
+   * Execute a function with shared hooks and instrumentation
+   */
+  async executeFunction(functionName, fndef, params, content, context) {
+    await this.hooks.beforeExecution?.(functionName, params, context);
+    const startTime = performance.now();
+    try {
+      const result = await this.executeWithTimeout(fndef.execute, params, content, context);
+      const duration = performance.now() - startTime;
+      await this.hooks.afterExecution?.(functionName, result, duration);
+      return {
+        success: true,
+        data: result,
+        duration,
+        timestamp: /* @__PURE__ */ new Date()
+      };
+    } catch (error) {
+      const duration = performance.now() - startTime;
+      await this.hooks.onError?.(functionName, error, duration);
+      return {
+        success: false,
+        error: {
+          message: error instanceof Error ? error.message : "Unknown error",
+          code: error instanceof Error && "code" in error ? error.code : void 0,
+          details: error
+        },
+        duration,
+        timestamp: /* @__PURE__ */ new Date()
+      };
+    }
+  }
+  /**
+   * Execute function implementation with timeout
+   */
+  async executeWithTimeout(impl, params, content, context, timeout = 3e4) {
+    return new Promise(async (resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error(`Function execution timed out after ${timeout}ms`));
+      }, timeout);
+      try {
+        const result = await impl(params, content, context);
+        clearTimeout(timeoutId);
+        resolve(result);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    });
+  }
+};
+
+// document/executor.ts
+var DocumentExecutor = class extends AbstractFunctionExecutor {
   options;
   constructor(options) {
+    super(options.hooks);
     this.options = {
       stopOnError: false,
       timeout: 3e4,
@@ -1572,7 +1632,40 @@ var DocumentExecutor = class {
         document,
         api: this.options.api
       };
-      const result = await this.executeNode(node, context);
+      const func = this.options.functions[node.fn];
+      if (!func) {
+        const errorResult = {
+          success: false,
+          error: {
+            message: `Function not found: ${node.fn}`,
+            code: "FUNCTION_NOT_FOUND",
+            details: { functionName: node.fn }
+          },
+          duration: 0,
+          timestamp: /* @__PURE__ */ new Date()
+        };
+        state.set(node.id, errorResult);
+        continue;
+      }
+      let validatedParams;
+      try {
+        validatedParams = func.schema.parse(node.parameters);
+      } catch (error) {
+        const errorResult = {
+          success: false,
+          error: {
+            message: error instanceof z.ZodError ? `Invalid parameters: ${error.errors.map((e) => e.message).join(", ")}` : "Parameter validation failed",
+            code: "INVALID_PARAMETERS",
+            details: error
+          },
+          duration: 0,
+          timestamp: /* @__PURE__ */ new Date()
+        };
+        state.set(node.id, errorResult);
+        continue;
+      }
+      const content = this.extractContent(node.content);
+      const result = await this.executeFunction(node.fn, func, validatedParams, content, context);
       state.set(node.id, result);
       if (!result.success && this.options.stopOnError) {
         break;
@@ -1609,7 +1702,22 @@ var DocumentExecutor = class {
       document,
       api: this.options.api
     };
-    const result = await this.executeNode(node, context);
+    const executableNode = node;
+    const func = this.options.functions[executableNode.fn];
+    if (!func) {
+      throw new Error(`Function not found: ${executableNode.fn}`);
+    }
+    let validatedParams;
+    try {
+      validatedParams = func.schema.parse(executableNode.parameters);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new Error(`Invalid parameters: ${error.errors.map((e) => e.message).join(", ")}`);
+      }
+      throw error;
+    }
+    const content = this.extractContent(executableNode.content);
+    const result = await this.executeFunction(executableNode.fn, func, validatedParams, content, context);
     state.set(nodeId, result);
     const endTime = /* @__PURE__ */ new Date();
     const metadata = {
@@ -1621,53 +1729,6 @@ var DocumentExecutor = class {
       nodesFailed: result.success ? 0 : 1
     };
     return { nodes: state, metadata };
-  }
-  /**
-   * Execute a single executable node
-   */
-  async executeNode(node, context) {
-    const startTime = Date.now();
-    try {
-      const func = this.options.functions[node.fn];
-      if (!func) {
-        throw new Error(`Function not found: ${node.fn}`);
-      }
-      let validatedParams;
-      try {
-        validatedParams = func.schema.parse(node.parameters);
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          throw new Error(`Invalid parameters: ${error.errors.map((e) => e.message).join(", ")}`);
-        }
-        throw error;
-      }
-      const content = this.extractContent(node.content);
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Execution timeout")), this.options.timeout);
-      });
-      const data = await Promise.race([
-        func.execute(validatedParams, content, context),
-        timeoutPromise
-      ]);
-      return {
-        success: true,
-        data,
-        duration: Date.now() - startTime,
-        timestamp: /* @__PURE__ */ new Date()
-      };
-    } catch (error) {
-      const errorObj = {
-        message: error instanceof Error ? error.message : String(error),
-        code: "EXECUTION_ERROR",
-        details: error
-      };
-      return {
-        success: false,
-        error: errorObj,
-        duration: Date.now() - startTime,
-        timestamp: /* @__PURE__ */ new Date()
-      };
-    }
   }
   /**
    * Find all executable nodes in document
@@ -2094,6 +2155,16 @@ function interpolateContent(content, resolvedVariables) {
 }
 
 // document/custom-function-executor.ts
+var AgentCustomFunctionExecutor = class extends AbstractFunctionExecutor {
+  options;
+  constructor(options) {
+    super(options.hooks);
+    this.options = options;
+  }
+  async execute(functionNode) {
+    return executeCustomFunction(functionNode, this.options);
+  }
+};
 async function executeCustomFunction(functionNode, options) {
   const startTime = Date.now();
   if (functionNode.type !== "function") {
@@ -2582,7 +2653,9 @@ ${availableTools.map((t) => `- ${t}`).join("\n")}`);
   for (const node of agent.nodes) {
     if (node.type === "function") {
       const title = node.props?.title || "Untitled Function";
-      customTools.push(`Custom function: ${title}`);
+      const functionName = title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+      const callableName = `custom--${functionName}`;
+      customTools.push(`- ${callableName} (Custom function: "${title}")`);
     } else if (node.type === "trigger") {
       const trigger = node.props?.trigger;
       if (trigger) {
@@ -2598,7 +2671,9 @@ ${availableTools.map((t) => `- ${t}`).join("\n")}`);
   if (customTools.length > 0) {
     sections.push(`
 Custom functions defined:
-${customTools.join("\n")}`);
+${customTools.join("\n")}
+
+IMPORTANT: When the user asks you to use a custom function by name, find the matching function in the available tools list and call it. Custom function names use double hyphens (--) instead of colons (:) when calling them.`);
   }
   if (triggers.length > 0) {
     sections.push(`
@@ -2667,6 +2742,8 @@ function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext) {
       const icon = block.props?.icon;
       const description = extractTextContent2(block);
       const definitionBlocks = extractFunctionDefinitionBlocks(block);
+      console.log(`\u{1F4CB} Extracted ${definitionBlocks.length} definition blocks from function "${title}"`);
+      console.log("\u{1F4CB} Definition blocks:", JSON.stringify(definitionBlocks, null, 2));
       if (definitionBlocks.length === 0) {
         console.warn(`Function "${title}" has no definition blocks`);
         continue;
@@ -2705,10 +2782,11 @@ function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext) {
           console.log(`\u{1F4C4} Content:`, content);
           console.log(`\u{1F50D} GetAgentContext available:`, !!getAgentContext);
           try {
-            const executionContext = await executeCustomFunction(customFunctionBlock, {
+            const executionOptions = {
               functions: baseFunctions,
               agentContext
-            });
+            };
+            const executionContext = await executeCustomFunction(customFunctionBlock, executionOptions);
             const lastNodeId = Array.from(executionContext.nodes.keys()).pop();
             const lastResult = lastNodeId ? executionContext.nodes.get(lastNodeId) : void 0;
             console.log(`\u{1F50D} Execution complete. Last node ID: ${lastNodeId}`);
@@ -2833,11 +2911,15 @@ var Agent = class {
    * Initialize tools for AI SDK (converts functions to AI tools)
    */
   initializeTools() {
+    console.log("[Agent] Initializing tools, agent program has nodes:", this.program.nodes.length);
+    console.log("[Agent] Node types:", this.program.nodes.map((n) => n.type));
     const customTools = extractCustomFunctions(this.program, this.functions, () => {
       const lastUserMessage = this.currentMessages.filter((m) => m.role === "user").pop();
       return typeof lastUserMessage?.content === "string" ? lastUserMessage.content : JSON.stringify(lastUserMessage?.content || "");
     });
+    console.log("[Agent] Custom tools extracted:", Object.keys(customTools));
     const allTools = mergeFunctionRegistries(this.functions, customTools);
+    console.log("[Agent] All tools after merge:", Object.keys(allTools).length, Object.keys(allTools));
     for (const [name, tool] of Object.entries(allTools)) {
       const aiToolName = toAzureFunctionName(name);
       this.aiTools[aiToolName] = {
@@ -2909,6 +2991,9 @@ var Agent = class {
     );
     console.log(
       `[Agent] \u{1F4DD} System prompt contains response_guidelines: ${systemPrompt.includes("response_guidelines")}`
+    );
+    console.log(
+      `[Agent] \u{1F4DD} Available functions in system prompt: ${functionNames.filter((name) => name.startsWith("custom")).join(", ")}`
     );
     return systemPrompt;
   }
@@ -3035,8 +3120,10 @@ var Agent = class {
   }
 };
 export {
+  AbstractFunctionExecutor,
   ActivityMemory,
   Agent,
+  AgentCustomFunctionExecutor,
   DocumentExecutor,
   GRAMMAR,
   GrammarCompiler,
