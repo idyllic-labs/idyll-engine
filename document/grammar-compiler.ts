@@ -211,8 +211,8 @@ export class GrammarCompiler {
       'bulletlistitem': 'bulletListItem',
       'numberedlistitem': 'numberedListItem',
       'checklistitem': 'checklistItem',
-      'tool:description': '_tool_description',
-      'tool:definition': '_tool_definition',
+      'function:description': '_function_description',
+      'function:definition': '_function_definition',
     };
 
     return typeMap[element] || element.replace(/[:-]/g, '_');
@@ -230,7 +230,7 @@ export class GrammarCompiler {
            ruleName === 'code' ||
            ruleName === 'quote' ||
            ruleName === 'separator' ||
-           ruleName === 'tool-block';
+           ruleName === 'function-block';
   }
 
   /**
@@ -251,7 +251,7 @@ export class GrammarCompiler {
     // This is a simplified version - in practice we'd need a more
     // sophisticated mapping from AST types back to grammar rules
     const ruleMap: Record<string, string> = {
-      'tool': 'tool-block',
+      'function': 'function-block',
       'list': 'list',
       'function_call': 'function-call',
       'trigger': 'trigger',

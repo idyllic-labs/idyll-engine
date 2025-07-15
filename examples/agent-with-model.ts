@@ -6,7 +6,7 @@
  * with an external AI model provider (e.g., from Vercel AI SDK).
  */
 
-import { Agent, createToolRegistry, defineTool, parseXmlToAst, AgentDefinition } from '@idyllic-labs/idyll-engine';
+import { Agent, createFunctionRegistry, defineFunction, parseXmlToAst, AgentDefinition } from '@idyllic-labs/idyll-engine';
 import { createAzure } from '@ai-sdk/azure';
 // import { openai } from '@ai-sdk/openai'; // Uncomment if using OpenAI instead
 import { Message } from 'ai';
@@ -23,9 +23,9 @@ const model = azure('gpt-4') as any;
 // Option 2: OpenAI
 // const model = openai('gpt-4-turbo');
 
-// Define some tools
-const tools = createToolRegistry({
-  'demo:greet': defineTool({
+// Define some functions
+const functions = createFunctionRegistry({
+  'demo:greet': defineFunction({
     schema: z.object({
       name: z.string().describe('Name to greet'),
     }),
@@ -35,7 +35,7 @@ const tools = createToolRegistry({
     },
   }),
   
-  'demo:calculate': defineTool({
+  'demo:calculate': defineFunction({
     schema: z.object({
       a: z.number(),
       b: z.number(),
@@ -56,7 +56,7 @@ const tools = createToolRegistry({
 // Parse the agent program from XML
 const program = parseXML(`
   <agent id="demo-agent" name="Demo Assistant">
-    <p>You are a helpful assistant with access to greeting and calculation tools.</p>
+    <p>You are a helpful assistant with access to greeting and calculation functions.</p>
   </agent>
 `) as AgentDefinition;
 
@@ -64,7 +64,7 @@ const program = parseXML(`
 const agent = new Agent({
   program,  // The agent program
   model,    // AI runtime
-  tools,    // Tool runtime
+  functions,    // Tool runtime
 });
 
 // Example usage

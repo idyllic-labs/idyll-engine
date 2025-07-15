@@ -12,7 +12,7 @@ Change a single attribute/property on a block.
 ```xml
 <edit:attr block-id="block123" name="language" value="typescript"/>
 <edit:attr block-id="block456" name="checked" value="true"/>
-<edit:attr block-id="fn123" name="idyll-tool" value="demo:calculate"/>
+<edit:attr block-id="fn123" name="idyll-fn" value="demo:calculate"/>
 ```
 
 ### 2. edit:content  
@@ -151,7 +151,7 @@ For precise selection within rich content using XPath or regex:
 ### Function Call Updates
 ```xml
 <diff>
-  <edit:attr block-id="fn123" name="idyll-tool" value="demo:calculate"/>
+  <edit:attr block-id="fn123" name="idyll-fn" value="demo:calculate"/>
   <edit:params block-id="fn123">{"expression": "5 * 8"}</edit:params>
 </diff>
 ```

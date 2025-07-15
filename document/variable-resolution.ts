@@ -1,7 +1,7 @@
 /**
  * Variable Resolution System for Idyllic Engine
  * 
- * Handles the resolution of variables in custom tools using AI interpolation
+ * Handles the resolution of variables in custom functions using AI interpolation
  */
 
 import type { Node, RichContent, VariableElement } from './ast';
@@ -24,7 +24,7 @@ export interface VariableResolutionContext {
   /** Agent-provided context (rich content) */
   agentContext: string;
   
-  /** Document context (surrounding blocks) */
+  /** Document context (surrounding nodes) */
   documentContext?: string;
   
   /** Inherited agent context/personality */
@@ -43,7 +43,7 @@ export interface VariableResolutionResult {
 }
 
 /**
- * Extract all unique variables from blocks
+ * Extract all unique variables from nodes
  * Follows declare-once, use-many pattern
  */
 export function extractVariableDefinitions(nodes: Node[]): VariableDefinition[] {
@@ -121,7 +121,7 @@ export function checkVariableRedeclaration(nodes: Node[]): Array<{ name: string;
 }
 
 /**
- * Extract variables from a single block
+ * Extract variables from a single node
  */
 function extractVariablesFromNode(node: Node): VariableElement[] {
   const variables: VariableElement[] = [];

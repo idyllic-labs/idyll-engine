@@ -4,7 +4,7 @@
  * This defines the semantic model for documents, independent of:
  * - BlockNote editor representation
  * - XML serialization format
- * - Specific tool implementations
+ * - Specific function implementations
  */
 
 // ============================================
@@ -151,7 +151,7 @@ export type NodeType =
 export type ContentNodeType = 
   | 'paragraph' | 'heading'
   | 'bulletListItem' | 'numberedListItem' | 'checklistItem'
-  | 'code' | 'quote' | 'separator' | 'data' | 'tool';
+  | 'code' | 'quote' | 'separator' | 'data' | 'function';
 
 // ============================================
 // Executable Nodes
@@ -160,7 +160,7 @@ export type ContentNodeType =
 export interface ExecutableNode {
   id: string;
   type: ExecutableNodeType;
-  tool: string; // e.g., "documents:create", "ai:generate-text"
+  fn: string; // e.g., "documents:create", "ai:generate-text"
   parameters: Record<string, unknown>;
   content?: RichContent[]; // Natural language content/instructions
   result?: ExecutionResult;

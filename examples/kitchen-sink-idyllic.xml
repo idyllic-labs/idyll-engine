@@ -41,8 +41,8 @@
   </p>
   <p id="0b35cb7d-24f3-4d1e-ac8b-22c3ae76635c" textColor="default" textAlignment="left" backgroundColor="default"></p>
   <p id="313263c1-413b-4608-9a01-de4e7578ea88" textColor="default" textAlignment="left" backgroundColor="default">You have access to this to answer my questions:</p>
-  <tool id="4b81435a-33ca-4226-adf3-809a53193a80" title="Find my life" icon="🔧">
-    <tool:description></tool:description>
-  </tool>
+  <function id="4b81435a-33ca-4226-adf3-809a53193a80" title="Find my life" icon="🔧">
+    <function:description></function:description>
+  </function>
   <p id="b055188c-09ce-4001-ae05-cc75c4ef346c" textColor="default" textAlignment="left" backgroundColor="default"></p>
 </document>

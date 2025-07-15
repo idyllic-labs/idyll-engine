@@ -141,11 +141,11 @@ function validateNode(
   
   // Validate executable nodes
   if (isExecutableNode(node)) {
-    if (!node.tool) {
+    if (!node.fn) {
       errors.push({
         type: 'error',
-        code: 'MISSING_TOOL',
-        message: 'Executable node must specify a tool',
+        code: 'MISSING_FUNCTION',
+        message: 'Executable node must specify a function',
         nodeId,
       });
     }
@@ -203,15 +203,15 @@ async function validateReferences(
     }
   }
   
-  // Validate tools
-  if (context.validateTool) {
+  // Validate functions
+  if (context.validateFunction) {
     for (const node of traverseNodes(document.nodes)) {
-      if (isExecutableNode(node) && node.tool) {
-        if (!context.validateTool(node.tool)) {
+      if (isExecutableNode(node) && node.fn) {
+        if (!context.validateFunction(node.fn)) {
           errors.push({
             type: 'error',
-            code: 'INVALID_TOOL',
-            message: `Tool not found: ${node.tool}`,
+            code: 'INVALID_FUNCTION',
+            message: `Function not found: ${node.fn}`,
             nodeId: node.id || 'unknown',
           });
         }

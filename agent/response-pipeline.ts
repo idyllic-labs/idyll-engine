@@ -1,23 +1,23 @@
 /**
  * Response Pipeline System
  * 
- * Provides middleware-based processing of tool execution results
+ * Provides middleware-based processing of function execution results
  * before they are returned to the agent conversation loop.
  */
 
 import { Message } from 'ai';
 
 /**
- * Context provided to middleware for processing tool results
+ * Context provided to middleware for processing function results
  */
 export interface MiddlewareContext {
-  /** Name of the tool that was executed */
-  toolName: string;
+  /** Name of the function that was executed */
+  functionName: string;
   
-  /** Parameters passed to the tool */
+  /** Parameters passed to the function */
   params: any;
   
-  /** The raw result from tool execution */
+  /** The raw result from function execution */
   result: any;
   
   /** Recent conversation messages for context-aware processing */
@@ -25,18 +25,18 @@ export interface MiddlewareContext {
 }
 
 /**
- * Middleware interface for processing tool results
+ * Middleware interface for processing function results
  */
 export interface ResponseMiddleware {
   /** Unique name for the middleware */
   name: string;
   
-  /** Process the tool result and return the modified result */
+  /** Process the function result and return the modified result */
   process(context: MiddlewareContext): Promise<any>;
 }
 
 /**
- * Pipeline that processes tool results through a chain of middleware
+ * Pipeline that processes function results through a chain of middleware
  */
 export class ResponsePipeline {
   private middleware: ResponseMiddleware[] = [];
@@ -49,7 +49,7 @@ export class ResponsePipeline {
   }
   
   /**
-   * Process a tool result through all middleware in order
+   * Process a function result through all middleware in order
    */
   async process(context: MiddlewareContext): Promise<any> {
     let result = context.result;

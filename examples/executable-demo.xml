@@ -2,11 +2,11 @@
 <document id="executable-demo">
   <h1>Document Execution Demo</h1>
   
-  <p>This document demonstrates various executable blocks and tools.</p>
+  <p>This document demonstrates various executable blocks and functions.</p>
   
   <h2>Basic Echo</h2>
   
-  <fncall idyll-tool="demo:echo">
+  <fncall idyll-fn="demo:echo">
     <params><![CDATA[{"message": "Hello from Idyllic!", "uppercase": true}]]></params>
     <content>This content is ignored when message param is provided</content>
   </fncall>
@@ -15,35 +15,35 @@
   
   <p>Let's do some calculations:</p>
   
-  <fncall idyll-tool="demo:math">
+  <fncall idyll-fn="demo:math">
     <params><![CDATA[{"operation": "add", "a": 42, "b": 13}]]></params>
     <content>Add two numbers</content>
   </fncall>
   
-  <fncall idyll-tool="demo:math">
+  <fncall idyll-fn="demo:math">
     <params><![CDATA[{"operation": "multiply", "a": 7, "b": 9}]]></params>
     <content>Multiply two numbers</content>
   </fncall>
   
   <h2>Random Number Generation</h2>
   
-  <fncall idyll-tool="demo:random">
+  <fncall idyll-fn="demo:random">
     <params><![CDATA[{"min": 1, "max": 100, "count": 5}]]></params>
     <content>Generate 5 random numbers between 1 and 100</content>
   </fncall>
   
   <h2>Context Awareness</h2>
   
-  <p>Tools can access execution context:</p>
+  <p>Functions can access execution context:</p>
   
-  <fncall idyll-tool="demo:context">
+  <fncall idyll-fn="demo:context">
     <params><![CDATA[{}]]></params>
     <content>Show me the current execution context</content>
   </fncall>
   
   <h2>Aggregating Previous Results</h2>
   
-  <fncall idyll-tool="demo:aggregate">
+  <fncall idyll-fn="demo:aggregate">
     <params><![CDATA[{"operation": "sum"}]]></params>
     <content>Sum all numeric values from previous executions</content>
   </fncall>
@@ -52,14 +52,14 @@
   
   <p>This block will fail intentionally:</p>
   
-  <fncall idyll-tool="demo:fail">
+  <fncall idyll-fn="demo:fail">
     <params><![CDATA[{"message": "Testing error handling", "code": "TEST_ERROR"}]]></params>
     <content>This should fail</content>
   </fncall>
   
   <h2>Conditional Execution</h2>
   
-  <fncall idyll-tool="demo:condition">
+  <fncall idyll-fn="demo:condition">
     <params><![CDATA[{"check": "has-errors"}]]></params>
     <content>Check if any previous executions had errors</content>
   </fncall>

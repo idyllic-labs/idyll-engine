@@ -2,7 +2,7 @@
  * Execution Types for Idyllic Document Engine
  * 
  * Defines all types related to document execution, including
- * execution state, results, context, and tool definitions.
+ * execution state, results, context, and function definitions.
  */
 
 import { z } from 'zod';
@@ -20,8 +20,6 @@ export interface NodeExecutionResult {
   timestamp: Date;
 }
 
-// Backward compatibility
-export type BlockExecutionResult = NodeExecutionResult;
 
 export interface NodeExecutionError {
   message: string;
@@ -29,8 +27,6 @@ export interface NodeExecutionError {
   details?: unknown;
 }
 
-// Backward compatibility
-export type BlockExecutionError = NodeExecutionError;
 
 // ============================================
 // Execution State
@@ -64,7 +60,7 @@ export interface ExecutionMetadata {
 // ============================================
 
 /**
- * Context provided to tools during execution
+ * Context provided to functions during execution
  */
 export interface NodeExecutionContext {
   /** ID of the currently executing node */
@@ -80,17 +76,15 @@ export interface NodeExecutionContext {
   api?: unknown;
 }
 
-// Backward compatibility
-export type BlockExecutionContext = NodeExecutionContext;
 
 // ============================================
-// Custom Tool Execution
+// Custom Function Execution
 // ============================================
 
 /**
- * Report returned from custom tool execution
+ * Report returned from custom function execution
  */
-export interface ToolExecutionReport {
+export interface FunctionExecutionReport {
   /** All resolved variables */
   variables: Map<string, string>;
   
@@ -99,48 +93,49 @@ export interface ToolExecutionReport {
   
   /** Execution metadata */
   metadata: {
-    toolName: string;
+    functionName: string;
     duration: number;
     nodesExecuted: number;
     nodesSucceeded: number;
     nodesFailed: number;
   };
   
-  /** The tool definition for reference */
-  toolDefinition: any; // Will be ToolNode when we add it to AST
+  /** The function definition for reference */
+  functionDefinition: any; // Will be FunctionNode when we add it to AST
 }
 
 // ============================================
-// Tool Definitions
+// Function Definitions
 // ============================================
 
 /**
- * Tool executor function signature
+ * Function executor function signature
  */
-export type ToolExecutor<TParams = any, TApi = any> = (
+export type FunctionExecutor<TParams = any, TApi = any> = (
   params: TParams,
   content: string,
   context: NodeExecutionContext & { api?: TApi }
 ) => Promise<unknown> | unknown;
 
 /**
- * Tool definition with schema and executor
+ * Function definition with schema and executor
  */
-export interface ToolDefinition<TParams = any, TApi = any> {
+export interface FunctionDefinition<TParams = any, TApi = any> {
   /** Zod schema for parameter validation */
   schema: z.ZodSchema<TParams>;
   
-  /** Function that executes the tool */
-  execute: ToolExecutor<TParams, TApi>;
+  /** Function that executes the function */
+  execute: FunctionExecutor<TParams, TApi>;
   
   /** Optional description for documentation */
   description?: string;
 }
 
 /**
- * Registry of tools available for execution
+ * Registry of functions available for execution
  */
-export type ToolRegistry<TApi = any> = Record<string, ToolDefinition<any, TApi>>;
+export type FunctionRegistry<TApi = any> = Record<string, FunctionDefinition<any, TApi>>;
+
 
 // ============================================
 // Execution Options
@@ -150,10 +145,10 @@ export type ToolRegistry<TApi = any> = Record<string, ToolDefinition<any, TApi>>
  * Options for document execution
  */
 export interface ExecutionOptions<TApi = any> {
-  /** Tools available for execution */
-  tools: ToolRegistry<TApi>;
+  /** Functions available for execution */
+  functions: FunctionRegistry<TApi>;
   
-  /** Optional API/services to inject into tool context */
+  /** Optional API/services to inject into function context */
   api?: TApi;
   
   /** Whether to stop on first error (default: false) */
@@ -176,12 +171,9 @@ export interface SingleNodeExecutionRequest {
   mode: 'single';
   document: IdyllDocument;
   nodeId?: string;
-  blockId?: string; // Backward compatibility
   options: ExecutionOptions;
 }
 
-// Backward compatibility
-export type SingleBlockExecutionRequest = SingleNodeExecutionRequest;
 
 export interface DocumentExecutionRequest {
   mode: 'document';

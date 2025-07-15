@@ -2,7 +2,7 @@
  * Document Executor for Idyllic Engine
  * 
  * Handles execution of executable nodes within documents,
- * maintaining execution state and providing context to tools.
+ * maintaining execution state and providing context to functions.
  */
 
 import { z } from 'zod';
@@ -17,11 +17,8 @@ import type {
   ExecutionReport,
   ExecutionOptions,
   NodeExecutionResult,
-  BlockExecutionResult,
   NodeExecutionContext,
-  BlockExecutionContext,
   NodeExecutionError,
-  BlockExecutionError,
   ExecutionMetadata,
   ExecutionRequest,
 } from './execution-types';
@@ -42,7 +39,7 @@ export class DocumentExecutor<TApi = any> {
    */
   async execute(request: ExecutionRequest): Promise<ExecutionReport> {
     if (request.mode === 'single') {
-      return this.executeSingleNode(request.document, (request as any).nodeId || (request as any).blockId!);
+      return this.executeSingleNode(request.document, (request as any).nodeId!);
     } else {
       return this.executeDocument(request.document);
     }
@@ -56,7 +53,7 @@ export class DocumentExecutor<TApi = any> {
     const state: ExecutionState = new Map();
     
     // Find all executable nodes
-    const executableNodes = this.findExecutableNodes(document.nodes || (document as any).blocks);
+    const executableNodes = this.findExecutableNodes(document.nodes);
     const total = executableNodes.length;
     
     // Execute nodes sequentially
@@ -157,16 +154,16 @@ export class DocumentExecutor<TApi = any> {
     const startTime = Date.now();
     
     try {
-      // Resolve the tool
-      const tool = this.options.tools[node.tool];
-      if (!tool) {
-        throw new Error(`Tool not found: ${node.tool}`);
+      // Resolve the function
+      const func = this.options.functions[node.fn];
+      if (!func) {
+        throw new Error(`Function not found: ${node.fn}`);
       }
       
       // Validate parameters
       let validatedParams: any;
       try {
-        validatedParams = tool.schema.parse(node.parameters);
+        validatedParams = func.schema.parse(node.parameters);
       } catch (error) {
         if (error instanceof z.ZodError) {
           throw new Error(`Invalid parameters: ${error.errors.map(e => e.message).join(', ')}`);
@@ -183,7 +180,7 @@ export class DocumentExecutor<TApi = any> {
       });
       
       const data = await Promise.race([
-        tool.execute(validatedParams, content, context),
+        func.execute(validatedParams, content, context),
         timeoutPromise,
       ]);
       
@@ -254,7 +251,7 @@ export class DocumentExecutor<TApi = any> {
    */
   private getPreviousResults(document: IdyllDocument, beforeNodeId: string): ExecutionState {
     const results: ExecutionState = new Map();
-    const executableNodes = this.findExecutableNodes(document.nodes || (document as any).blocks);
+    const executableNodes = this.findExecutableNodes(document.nodes);
     
     // Find all nodes before the target node
     for (const node of executableNodes) {

@@ -1,17 +1,17 @@
 /**
- * Demo Tools for CLI Testing
+ * Demo Functions for CLI Testing
  * 
- * Provides a set of simple tools for testing document execution
+ * Provides a set of simple functions for testing document execution
  * without requiring external dependencies.
  */
 
 import { z } from 'zod';
-import { createToolRegistry, defineTool } from '../document/tool-registry';
+import { createFunctionRegistry, defineFunction } from '../document/function-registry';
 import type { NodeExecutionContext } from '../document/execution-types';
 
 export function createDemoTools() {
-  return createToolRegistry({
-    'demo:echo': defineTool({
+  return createFunctionRegistry({
+    'demo:echo': defineFunction({
       schema: z.object({
         message: z.string().optional(),
         uppercase: z.boolean().optional().default(false),
@@ -27,7 +27,7 @@ export function createDemoTools() {
       },
     }),
     
-    'demo:math': defineTool({
+    'demo:math': defineFunction({
       schema: z.object({
         operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
         a: z.number(),
@@ -64,7 +64,7 @@ export function createDemoTools() {
       },
     }),
     
-    'demo:random': defineTool({
+    'demo:random': defineFunction({
       schema: z.object({
         min: z.number().default(0),
         max: z.number().default(100),
@@ -89,7 +89,7 @@ export function createDemoTools() {
       },
     }),
     
-    'demo:delay': defineTool({
+    'demo:delay': defineFunction({
       schema: z.object({
         milliseconds: z.number().positive().default(1000),
       }),
@@ -107,9 +107,9 @@ export function createDemoTools() {
       },
     }),
     
-    'demo:fail': defineTool({
+    'demo:fail': defineFunction({
       schema: z.object({
-        message: z.string().default('This tool always fails'),
+        message: z.string().default('This function always fails'),
         code: z.string().default('DEMO_ERROR'),
       }),
       description: 'Always fails for testing error handling',
@@ -118,7 +118,7 @@ export function createDemoTools() {
       },
     }),
     
-    'demo:context': defineTool({
+    'demo:context': defineFunction({
       schema: z.object({}),
       description: 'Shows execution context information',
       execute: async (_, content, context: NodeExecutionContext) => {
@@ -141,7 +141,7 @@ export function createDemoTools() {
       },
     }),
     
-    'demo:aggregate': defineTool({
+    'demo:aggregate': defineFunction({
       schema: z.object({
         operation: z.enum(['sum', 'average', 'concat']).default('sum'),
       }),
@@ -217,7 +217,7 @@ export function createDemoTools() {
       },
     }),
     
-    'demo:condition': defineTool({
+    'demo:condition': defineFunction({
       schema: z.object({
         check: z.enum(['has-errors', 'all-success', 'count-gt', 'count-lt']),
         value: z.number().optional(),

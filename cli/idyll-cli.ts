@@ -12,18 +12,18 @@ import { readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import chalk from 'chalk';
 import { parseXmlToAst, serializeAstToXml, validateDocument } from '../index';
-import type { ToolResolver, ToolExecutor, ToolResult, ValidationContext, DocumentExecutionContext } from '../types';
+import type { FunctionResolver, FunctionExecutor, FunctionResult, ValidationContext, DocumentExecutionContext } from '../types';
 
-// Mock tool resolver for testing
-const mockToolResolver: ToolResolver = {
+// Mock function resolver for testing
+const mockFunctionResolver: FunctionResolver = {
   resolve(name: string) {
-    const mockTools = ['test:echo', 'test:fail', 'test:delay'];
-    if (!mockTools.includes(name)) return null;
+    const mockFunctions = ['test:echo', 'test:fail', 'test:delay'];
+    if (!mockFunctions.includes(name)) return null;
     
     return {
       name,
       title: `Mock ${name}`,
-      description: `Mock tool for testing`,
+      description: `Mock function for testing`,
       contentRequirement: 'optional',
       validate: () => ({ success: true }),
     };
@@ -33,13 +33,13 @@ const mockToolResolver: ToolResolver = {
   }
 };
 
-// Mock tool executor for testing
-const mockToolExecutor: ToolExecutor = {
-  async execute(tool: string, params: Record<string, unknown>, context) {
-    console.log(chalk.blue(`Executing tool: ${tool}`));
+// Mock function executor for testing
+const mockFunctionExecutor: FunctionExecutor = {
+  async execute(functionName: string, params: Record<string, unknown>, context) {
+    console.log(chalk.blue(`Executing function: ${functionName}`));
     console.log(chalk.gray('Parameters:'), params);
     
-    switch (tool) {
+    switch (functionName) {
       case 'test:echo':
         return {
           success: true,
@@ -52,7 +52,7 @@ const mockToolExecutor: ToolExecutor = {
           success: false,
           error: {
             code: 'TEST_ERROR',
-            message: 'This tool always fails for testing',
+            message: 'This function always fails for testing',
             details: params
           }
         };
@@ -71,7 +71,7 @@ const mockToolExecutor: ToolExecutor = {
           success: false,
           error: {
             code: 'UNKNOWN_TOOL',
-            message: `Unknown tool: ${tool}`
+            message: `Unknown function: ${functionName}`
           }
         };
     }
@@ -80,8 +80,8 @@ const mockToolExecutor: ToolExecutor = {
 
 // Mock validation context
 const mockValidationContext: ValidationContext = {
-  validateTool(toolName: string) {
-    return mockToolResolver.resolve(toolName) !== null;
+  validateFunction(functionName: string) {
+    return mockFunctionResolver.resolve(functionName) !== null;
   },
   validateMention() {
     return true; // Accept all mentions for testing
@@ -216,8 +216,8 @@ async function executeCommand(filePath: string) {
     
     /*
     const result = await executeDocument(document, context, {
-      toolResolver: mockToolResolver,
-      toolExecutor: mockToolExecutor,
+      functionResolver: mockFunctionResolver,
+      functionExecutor: mockFunctionExecutor,
     });
     
     console.log(chalk.blue('\nExecution Summary:'));

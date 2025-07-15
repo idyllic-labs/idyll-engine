@@ -35,7 +35,7 @@ describe('Idyll Engine', () => {
     it('should parse function call blocks', () => {
       const xml = `
         <document>
-          <fncall idyll-tool="test:hello" enabled="true">
+          <fncall idyll-fn="test:hello">
             <params><![CDATA[{"name": "World"}]]></params>
             <content>Say hello to the world</content>
           </fncall>
@@ -47,7 +47,7 @@ describe('Idyll Engine', () => {
       
       expect(block.type).toBe('function_call');
       if (block.type === 'function_call') {
-        expect(block.tool).toBe('test:hello');
+        expect(block.fn).toBe('test:hello');
         expect(block.parameters).toEqual({ name: 'World' });
         expect(block.content?.[0]).toMatchObject({
           type: 'text',
@@ -71,7 +71,7 @@ describe('Idyll Engine', () => {
       
       expect(block.type).toBe('trigger');
       if (block.type === 'trigger') {
-        expect(block.tool).toBe('time:schedule');
+        expect(block.fn).toBe('time:schedule');
         expect(block.parameters).toEqual({ cronExpression: '0 9 * * *' });
         expect(block.metadata?.enabled).toBe(true);
       }
@@ -130,7 +130,7 @@ describe('Idyll Engine', () => {
           {
             id: 'f1',
             type: 'function_call' as const,
-            tool: 'test:greet',
+            fn: 'test:greet',
             parameters: { name: 'Alice' },
             content: [{ type: 'text' as const, text: 'Greet the user' }]
           }
@@ -141,7 +141,7 @@ describe('Idyll Engine', () => {
       
       expect(xml).toContain('<document id="test-doc">');
       expect(xml).toContain('<p id="p1">Hello world</p>'); // Updated to match actual serialization
-      expect(xml).toContain('<fncall id="f1" idyll-tool="test:greet">'); // Include ID attribute
+      expect(xml).toContain('<fncall id="f1" idyll-fn="test:greet">'); // Include ID attribute
       expect(xml).toContain('<params><![CDATA[{"name":"Alice"}]]></params>');
       expect(xml).toContain('<content>Greet the user</content>');
     });
@@ -152,7 +152,7 @@ describe('Idyll Engine', () => {
       const doc = parseXmlToAst(`
         <document>
           <p>Valid paragraph</p>
-          <fncall idyll-tool="test:hello">
+          <fncall idyll-fn="test:hello">
             <params><![CDATA[{"name": "World"}]]></params>
           </fncall>
         </document>
@@ -164,24 +164,24 @@ describe('Idyll Engine', () => {
       expect(result.errors).toHaveLength(0);
     });
 
-    it('should validate tool references when context provided', async () => {
+    it('should validate function references when context provided', async () => {
       const doc = parseXmlToAst(`
         <document>
-          <fncall idyll-tool="unknown:tool">
+          <fncall idyll-fn="unknown:function">
             <params><![CDATA[{}]]></params>
           </fncall>
         </document>
       `);
 
       const context: ValidationContext = {
-        validateTool: (name) => name === 'test:hello' // Only test:hello exists
+        validateFunction: (name) => name === 'test:hello' // Only test:hello exists
       };
 
       const result = await validateDocument(doc, context);
       
       expect(result.valid).toBe(false);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].message).toContain('Tool not found: unknown:tool');
+      expect(result.errors[0].message).toContain('Function not found: unknown:function');
     });
 
     it('should validate mentions and variables', async () => {
@@ -212,12 +212,12 @@ describe('Idyll Engine', () => {
 
   describe('Document Execution', () => {
     it('should execute function call blocks', async () => {
-      // Create tool registry using new API
-      const { createToolRegistry, defineTool } = require('../document/tool-registry');
+      // Create function registry using new API
+      const { createFunctionRegistry, defineFunction } = require('..');
       const { z } = require('zod');
       
-      const tools = createToolRegistry({
-        'test:greet': defineTool({
+      const functions = createFunctionRegistry({
+        'test:greet': defineFunction({
           schema: z.object({
             name: z.string(),
           }),
@@ -232,18 +232,18 @@ describe('Idyll Engine', () => {
       const doc = parseXmlToAst(`
         <document>
           <p>Let me greet you</p>
-          <fncall idyll-tool="test:greet">
+          <fncall idyll-fn="test:greet">
             <params><![CDATA[{"name": "Alice"}]]></params>
             <content>Greet the user named Alice</content>
           </fncall>
         </document>
       `);
 
-      const executor = new DocumentExecutor({ tools });
+      const executor = new DocumentExecutor({ functions });
       const result = await executor.execute({
         mode: 'document',
         document: doc,
-        options: { tools }
+        options: { functions }
       });
       
       // Check execution report structure
@@ -261,32 +261,32 @@ describe('Idyll Engine', () => {
     });
 
     it('should handle execution errors gracefully', async () => {
-      const { createToolRegistry, defineTool } = require('../document/tool-registry');
+      const { createFunctionRegistry, defineFunction } = require('..');
       const { z } = require('zod');
       
-      const tools = createToolRegistry({
-        'test:fail': defineTool({
+      const functions = createFunctionRegistry({
+        'test:fail': defineFunction({
           schema: z.object({}),
-          description: 'Tool that always fails',
+          description: 'Function that always fails',
           execute: async () => {
-            throw new Error('Tool execution failed');
+            throw new Error('Function execution failed');
           },
         })
       });
 
       const doc = parseXmlToAst(`
         <document>
-          <fncall idyll-tool="test:fail">
+          <fncall idyll-fn="test:fail">
             <params><![CDATA[{}]]></params>
           </fncall>
         </document>
       `);
 
-      const executor = new DocumentExecutor({ tools });
+      const executor = new DocumentExecutor({ functions });
       const result = await executor.execute({
         mode: 'document',
         document: doc,
-        options: { tools }
+        options: { functions }
       });
       
       // Check that execution completed but with failures
@@ -296,7 +296,7 @@ describe('Idyll Engine', () => {
       
       const executions = Array.from(result.nodes.values());
       expect(executions[0].success).toBe(false);
-      expect(executions[0].error?.message).toContain('Tool execution failed');
+      expect(executions[0].error?.message).toContain('Function execution failed');
     });
   });
 
@@ -307,7 +307,7 @@ describe('Idyll Engine', () => {
           <h1>Document Processing Example</h1>
           <p>This document has multiple executable blocks.</p>
           
-          <fncall idyll-tool="data:fetch">
+          <fncall idyll-fn="data:fetch">
             <params><![CDATA[{"source": "api", "limit": 10}]]></params>
             <content>Fetch latest data from API</content>
           </fncall>
@@ -316,7 +316,7 @@ describe('Idyll Engine', () => {
             <listItem>First item</listItem>
             <listItem>
               Nested content with 
-              <fncall idyll-tool="ai:summarize">
+              <fncall idyll-fn="ai:summarize">
                 <params><![CDATA[{"maxLength": 100}]]></params>
                 <content>Summarize the fetched data</content>
               </fncall>
@@ -353,7 +353,7 @@ describe('Idyll Engine', () => {
       const trigger = doc.nodes[3]; // Adjusted index
       if (trigger.type === 'trigger') {
         expect(trigger.metadata?.enabled).toBe(true); // Current parser behavior
-        expect(trigger.tool).toBe('webhook:receive');
+        expect(trigger.fn).toBe('webhook:receive');
       }
     });
   });

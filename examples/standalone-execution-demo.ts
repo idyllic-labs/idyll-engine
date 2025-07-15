@@ -3,7 +3,7 @@
  * Standalone Execution Demo
  *
  * This script demonstrates the complete flow of using the Idyll engine:
- * 1. Creating tools with Zod schemas
+ * 1. Creating functions with Zod schemas
  * 2. Defining a document with executable blocks
  * 3. Parsing the XML document
  * 4. Setting up the execution engine
@@ -14,27 +14,27 @@
  */
 
 import { z } from "zod";
-import { parseXML, serializeToXML } from "../document/parser-grammar";
+import { parseXmlToAst, serializeAstToXml } from "../document/parser-grammar";
 import { DocumentExecutor } from "../document/executor";
-import { createToolRegistry, defineTool } from "../document/tool-registry";
-import type { BlockExecutionContext } from "../document/execution-types";
+import { createFunctionRegistry, defineFunction } from "../document/function-registry";
+import type { NodeExecutionContext } from "../document/execution-types";
 import type { IdyllDocument } from "../document/ast";
 import { generateText } from "ai";
 
 // =============================================================================
-// STEP 1: Define our tools
+// STEP 1: Define our functions
 // =============================================================================
 
 /**
- * Tools are functions that can be called from within documents.
- * Each tool has:
+ * Functions are callable units that can be executed from within documents.
+ * Each function has:
  * - A Zod schema for parameter validation
  * - An execute function that receives (params, content, context)
  * - An optional description
  */
-const tools = createToolRegistry({
-  // Simple echo tool - returns what you send it
-  "demo:echo": defineTool({
+const functions = createFunctionRegistry({
+  // Simple echo function - returns what you send it
+  "demo:echo": defineFunction({
     schema: z.object({
       prefix: z.string().optional().default("Echo: "),
       shout: z.boolean().optional().default(false),
@@ -50,7 +50,7 @@ const tools = createToolRegistry({
     },
   }),
 
-  "demo:generateText": defineTool({
+  "demo:generateText": defineFunction({
     schema: z.object({}),
     description: "Generates text based on a prompt",
     execute: async (params, content, context) => {
@@ -60,8 +60,8 @@ const tools = createToolRegistry({
     },
   }),
 
-  // Math tool - performs arithmetic operations
-  "demo:add": defineTool({
+  // Math function - performs arithmetic operations
+  "demo:add": defineFunction({
     schema: z.object({
       numbers: z.array(z.number()).min(2),
     }),
@@ -76,13 +76,13 @@ const tools = createToolRegistry({
     },
   }),
 
-  // Tool that uses previous results
-  "demo:summarize": defineTool({
+  // Function that uses previous results
+  "demo:summarize": defineFunction({
     schema: z.object({
       format: z.enum(["json", "text"]).default("text"),
     }),
     description: "Summarizes all previous execution results",
-    execute: async (params, content, context: BlockExecutionContext) => {
+    execute: async (params, content, context: NodeExecutionContext) => {
       const results = Array.from(context.previousResults.entries());
 
       if (params.format === "json") {
@@ -105,7 +105,7 @@ const tools = createToolRegistry({
           "Results:",
           ...results.map(
             ([id, r], i) =>
-              `${i + 1}. Block ${id.slice(0, 8)}... - ${r.success ? "✓" : "✗"}`
+              `${i + 1}. Node ${id.slice(0, 8)}... - ${r.success ? "✓" : "✗"}`
           ),
         ];
         return {
@@ -116,7 +116,7 @@ const tools = createToolRegistry({
   }),
 
   // Tool that can fail (for testing error handling)
-  "demo:divide": defineTool({
+  "demo:divide": defineFunction({
     schema: z.object({
       numerator: z.number(),
       denominator: z.number(),
@@ -164,7 +164,7 @@ const documentXML = `<?xml version="1.0" encoding="UTF-8"?>
   
   <p>Let's start with a simple echo:</p>
   
-  <fncall idyll-tool="demo:echo">
+  <fncall idyll-fn="demo:echo">
     <params><![CDATA[{"prefix": "👋 ", "shout": false}]]></params>
     <content>Hello from the execution engine!</content>
   </fncall>
@@ -173,49 +173,49 @@ const documentXML = `<?xml version="1.0" encoding="UTF-8"?>
   
   <p>Now let's do some math:</p>
   
-  <fncall idyll-tool="demo:add">
+  <fncall idyll-fn="demo:add">
     <params><![CDATA[{"numbers": [10, 20, 30, 40]}]]></params>
     <content>Adding multiple numbers together</content>
   </fncall>
   
   <p>And another calculation:</p>
   
-  <fncall idyll-tool="demo:add">
+  <fncall idyll-fn="demo:add">
     <params><![CDATA[{"numbers": [1.5, 2.5, 3.5]}]]></params>
     <content>Adding decimal numbers</content>
   </fncall>
   
   <h2>Error Handling</h2>
   
-  <p>This block will fail (division by zero):</p>
+  <p>This node will fail (division by zero):</p>
   
-  <fncall idyll-tool="demo:divide">
+  <fncall idyll-fn="demo:divide">
     <params><![CDATA[{"numerator": 100, "denominator": 0}]]></params>
     <content>Attempting division by zero</content>
   </fncall>
   
   <p>But this one will succeed:</p>
   
-  <fncall idyll-tool="demo:divide">
+  <fncall idyll-fn="demo:divide">
     <params><![CDATA[{"numerator": 100, "denominator": 4}]]></params>
     <content>Normal division</content>
   </fncall>
   
   <h2>Context-Aware Execution</h2>
   
-  <p>This tool can see all previous results:</p>
+  <p>This function can see all previous results:</p>
   
-  <fncall idyll-tool="demo:summarize">
+  <fncall idyll-fn="demo:summarize">
     <params><![CDATA[{"format": "text"}]]></params>
     <content>Summarize all previous executions</content>
   </fncall>
 
-  <fncall idyll-tool="demo:generateText">
+  <fncall idyll-fn="demo:generateText">
     <params><![CDATA[{}]]></params>
     <content>Generate a short story about a cat</content>
   </fncall>
 
-  <fncall idyll-tool="demo:generateText">
+  <fncall idyll-fn="demo:generateText">
     <params><![CDATA[{}]]></params>
     <content>Generate what you see above.</content>
   </fncall>
@@ -241,7 +241,7 @@ async function main() {
    * The parser converts XML into an AST (Abstract Syntax Tree).
    * This AST is what the engine works with internally.
    */
-  const document = parseXML(documentXML);
+  const document = parseXmlToAst(documentXML);
 
   // Type guard to ensure we have a regular document
   if ("type" in document && document.type === "agent") {
@@ -251,7 +251,7 @@ async function main() {
 
   console.log("✅ Document parsed successfully");
   console.log(`   - ID: ${(document as any).id}`);
-  console.log(`   - Blocks: ${(document as any).blocks?.length || 0}`);
+  console.log(`   - Nodes: ${(document as any).nodes?.length || 0}`);
   console.log("");
 
   // -----------------------------
@@ -261,22 +261,22 @@ async function main() {
 
   /**
    * The DocumentExecutor is initialized with:
-   * - tools: The registry of available tools
+   * - functions: The registry of available functions
    * - onProgress: Optional callback for execution progress
    * - stopOnError: Whether to halt on first error (default: false)
-   * - timeout: Max time per tool execution (default: 30s)
+   * - timeout: Max time per function execution (default: 30s)
    */
   const executor = new DocumentExecutor({
-    tools,
-    onProgress: (blockId, current, total) => {
+    functions,
+    onProgress: (nodeId, current, total) => {
       console.log(
-        `   ⏳ [${current}/${total}] Executing block ${blockId.slice(0, 8)}...`
+        `   ⏳ [${current}/${total}] Executing node ${nodeId.slice(0, 8)}...`
       );
     },
-    stopOnError: false, // Continue even if a block fails
+    stopOnError: false, // Continue even if a node fails
   });
 
-  console.log("✅ Engine created with", Object.keys(tools).length, "tools");
+  console.log("✅ Engine created with", Object.keys(functions).length, "functions");
   console.log("");
 
   // -----------------------------
@@ -293,7 +293,7 @@ async function main() {
   const report = await executor.execute({
     mode: "document",
     document: document as IdyllDocument,
-    options: { tools }, // Tools are passed again here for the execution context
+    options: { functions }, // Tools are passed again here for the execution context
   });
 
   console.log("\n✅ Execution complete!\n");
@@ -304,9 +304,9 @@ async function main() {
   console.log("4️⃣  Execution Report:");
   console.log("━".repeat(50));
   console.log(`Total duration: ${report.metadata.totalDuration}ms`);
-  console.log(`Blocks executed: ${report.metadata.blocksExecuted}`);
-  console.log(`Successful: ${report.metadata.blocksSucceeded} ✅`);
-  console.log(`Failed: ${report.metadata.blocksFailed} ❌`);
+  console.log(`Nodes executed: ${report.metadata.nodesExecuted}`);
+  console.log(`Successful: ${report.metadata.nodesSucceeded} ✅`);
+  console.log(`Failed: ${report.metadata.nodesFailed} ❌`);
   console.log("");
 
   // Show individual results
@@ -314,8 +314,8 @@ async function main() {
   console.log("━".repeat(50));
 
   let resultIndex = 1;
-  for (const [blockId, result] of report.blocks) {
-    console.log(`\n${resultIndex}. Block: ${blockId}`);
+  for (const [nodeId, result] of report.nodes) {
+    console.log(`\n${resultIndex}. Node: ${nodeId}`);
     console.log(`   Status: ${result.success ? "✅ Success" : "❌ Failed"}`);
     console.log(`   Duration: ${result.duration}ms`);
 
@@ -338,12 +338,12 @@ async function main() {
 
   /**
    * We can merge the execution results back into the document.
-   * This updates the <result> elements within each <fncall> block.
+   * This updates the <result> elements within each <fncall> node.
    */
   const updatedDocument = applyResultsToDocument(document, report);
 
   // Serialize back to XML
-  const updatedXML = serializeToXML(updatedDocument);
+  const updatedXML = serializeAstToXml(updatedDocument);
 
   console.log("✅ Results applied to document");
   console.log("\n📄 First 500 chars of updated XML:");
@@ -369,14 +369,14 @@ function applyResultsToDocument(document: any, report: any): any {
   // Deep clone to avoid mutating the original
   const updated = JSON.parse(JSON.stringify(document));
 
-  function updateBlocks(blocks: any[]): void {
-    for (const block of blocks) {
-      // Check if this is an executable block with results
-      if (block.type === "function_call" && report.blocks.has(block.id)) {
-        const result = report.blocks.get(block.id);
+  function updateNodes(nodes: any[]): void {
+    for (const node of nodes) {
+      // Check if this is an executable node with results
+      if (node.type === "function_call" && report.nodes.has(node.id)) {
+        const result = report.nodes.get(node.id);
 
-        // Add the result to the block
-        block.result = {
+        // Add the result to the node
+        node.result = {
           success: result.success,
           data: result.success ? result.data : undefined,
           error: result.success ? undefined : result.error,
@@ -384,13 +384,13 @@ function applyResultsToDocument(document: any, report: any): any {
       }
 
       // Recurse into children
-      if (block.children) {
-        updateBlocks(block.children);
+      if (node.children) {
+        updateNodes(node.children);
       }
     }
   }
 
-  updateBlocks(updated.blocks);
+  updateNodes(updated.nodes);
   return updated;
 }
 

@@ -24,7 +24,7 @@ const sampleNodes: Node[] = [
   {
     id: 'fn1',
     type: 'function_call',
-    tool: 'demo:echo',
+    fn: 'demo:echo',
     parameters: { message: 'original message' },
     instructions: [{ type: 'text', text: 'Echo this message' }]
   } as ExecutableNode

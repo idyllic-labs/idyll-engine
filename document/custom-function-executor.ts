@@ -1,7 +1,7 @@
 /**
- * Custom Tool Executor for Idyllic Engine
+ * Custom Function Executor for Idyllic Engine
  * 
- * Executes custom tools defined with <tool> blocks, handling
+ * Executes custom functions defined with <function> blocks, handling
  * variable resolution and multi-step execution
  */
 
@@ -13,10 +13,9 @@ import type {
 } from './ast';
 import { isExecutableNode, getExecutableNodes } from './ast';
 import type { 
-  ToolExecutionReport, 
+  FunctionExecutionReport, 
   ExecutionOptions,
-  NodeExecutionResult,
-  BlockExecutionResult 
+  NodeExecutionResult
 } from './execution-types';
 import { DocumentExecutor } from './executor';
 import {
@@ -29,10 +28,10 @@ import {
 } from './variable-resolution';
 
 /**
- * Options for custom tool execution
+ * Options for custom function execution
  */
-export interface CustomToolExecutionOptions<TApi = any> extends ExecutionOptions<TApi> {
-  /** Agent context provided when invoking the tool */
+export interface CustomFunctionExecutionOptions<TApi = any> extends ExecutionOptions<TApi> {
+  /** Agent context provided when invoking the function */
   agentContext: string;
   
   /** Inherited context from agent */
@@ -40,23 +39,23 @@ export interface CustomToolExecutionOptions<TApi = any> extends ExecutionOptions
 }
 
 /**
- * Execute a custom tool defined as a ContentNode
+ * Execute a custom function defined as a ContentNode
  */
-export async function executeCustomTool<TApi = any>(
-  toolNode: ContentNode,
-  options: CustomToolExecutionOptions<TApi>
-): Promise<ToolExecutionReport> {
+export async function executeCustomFunction<TApi = any>(
+  functionNode: ContentNode,
+  options: CustomFunctionExecutionOptions<TApi>
+): Promise<FunctionExecutionReport> {
   const startTime = Date.now();
   
-  // Validate it's a tool node
-  if (toolNode.type !== 'tool') {
-    throw new Error('Node is not a tool');
+  // Validate it's a function node
+  if (functionNode.type !== 'function') {
+    throw new Error('Node is not a function');
   }
   
-  const toolName = (toolNode.props?.title as string) || 'Unnamed Tool';
+  const functionName = (functionNode.props?.title as string) || 'Unnamed Function';
   
-  // Get tool definition nodes (children)
-  const definitionNodes = toolNode.children || [];
+  // Get function definition nodes (children)
+  const definitionNodes = functionNode.children || [];
   
   // Check for variable redeclaration errors
   const redeclarationErrors = checkVariableRedeclaration(definitionNodes);
@@ -95,7 +94,7 @@ export async function executeCustomTool<TApi = any>(
   
   // Create a document for execution
   const executionDocument: IdyllDocument = {
-    id: `tool-exec-${Date.now()}`,
+    id: `function-exec-${Date.now()}`,
     nodes: interpolatedNodes,
   };
   
@@ -108,17 +107,17 @@ export async function executeCustomTool<TApi = any>(
   });
   
   // Build execution context
-  const executionContext: ToolExecutionReport = {
+  const executionContext: FunctionExecutionReport = {
     variables: resolutionResult.variables,
     nodes: report.nodes,
     metadata: {
-      toolName,
+      functionName: functionName,
       duration: Date.now() - startTime,
       nodesExecuted: report.metadata.nodesExecuted,
       nodesSucceeded: report.metadata.nodesSucceeded,
       nodesFailed: report.metadata.nodesFailed,
     },
-    toolDefinition: toolNode,
+    functionDefinition: functionNode,
   };
   
   return executionContext;
@@ -164,11 +163,11 @@ function interpolateExecutableNodes(
 }
 
 /**
- * Extract relevant result from tool execution context
+ * Extract relevant result from function execution context
  * This would be used by the subprocess to return only what's needed
  */
 export function extractRelevantResult(
-  context: ToolExecutionReport,
+  context: FunctionExecutionReport,
   extractionHint?: string
 ): unknown {
   // Get the last successful result by default
@@ -189,16 +188,16 @@ export function extractRelevantResult(
   return {
     success: false,
     errors,
-    toolName: context.metadata.toolName,
+    functionName: context.metadata.functionName,
   };
 }
 
 /**
- * Parse custom tool from document
+ * Parse custom function from document
  */
-export function parseCustomTool(document: IdyllDocument): ContentNode | null {
+export function parseCustomFunction(document: IdyllDocument): ContentNode | null {
   for (const node of document.nodes) {
-    if ('type' in node && node.type === 'tool') {
+    if ('type' in node && node.type === 'function') {
       return node as ContentNode;
     }
   }

@@ -25,21 +25,21 @@ export function buildSystemPrompt(agent: AgentDocument, availableTools: string[]
   // Model info
   sections.push(`\nModel: ${agent.model || 'default'}`);
   
-  // Available tools
+  // Available functions (shown as tools to the AI)
   if (availableTools.length > 0) {
     sections.push(`\nAvailable tools:\n${availableTools.map(t => `- ${t}`).join('\n')}`);
   }
   
-  // Process blocks for custom instructions and tool definitions
+  // Process blocks for custom instructions and function definitions
   const instructions: string[] = [];
   const customTools: string[] = [];
   const triggers: string[] = [];
   
   for (const node of agent.nodes) {
-    if (node.type === 'tool') {
-      // Extract tool definition
-      const title = node.props?.title as string || 'Untitled Tool';
-      customTools.push(`Custom tool: ${title}`);
+    if (node.type === 'function') {
+      // Extract function definition
+      const title = node.props?.title as string || 'Untitled Function';
+      customTools.push(`Custom function: ${title}`);
     } else if (node.type === 'trigger') {
       // Note triggers
       const trigger = node.props?.trigger as string;
@@ -55,9 +55,9 @@ export function buildSystemPrompt(agent: AgentDocument, availableTools: string[]
     }
   }
   
-  // Add custom tools section
+  // Add custom functions section
   if (customTools.length > 0) {
-    sections.push(`\nCustom tools defined:\n${customTools.join('\n')}`);
+    sections.push(`\nCustom functions defined:\n${customTools.join('\n')}`);
   }
   
   // Add triggers section
@@ -115,17 +115,17 @@ export function buildDetailedSystemPrompt(
 Documents are structured using XML with blocks like:
 - <p> for paragraphs
 - <h1>, <h2>, etc. for headings
-- <fncall idyll-tool="..."> for tool execution
+- <fncall idyll-fn="..."> for function execution
 - <variable name="..." /> for variables
 - <mention:type id="...">label</mention:type> for references
 </document_format>
 
 <response_guidelines>
 When responding to user queries:
-1. If you need to call tools, call them first
-2. After tool calls complete, provide ONE clear, comprehensive response
+1. If you need to call functions, call them first
+2. After function calls complete, provide ONE clear, comprehensive response
 3. Do not repeat or rephrase the same information multiple times
-4. Only continue with additional steps if you need to call different tools or perform distinct reasoning
+4. Only continue with additional steps if you need to call different functions or perform distinct reasoning
 5. Avoid generating multiple similar responses about the same topic
 </response_guidelines>`;
   

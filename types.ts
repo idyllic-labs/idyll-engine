@@ -30,11 +30,11 @@ export interface ValidationContext {
   };
   
   /**
-   * Validate that a tool exists
-   * @param toolName The tool name to validate
-   * @returns True if tool exists, false otherwise
+   * Validate that a function exists
+   * @param functionName The function name to validate
+   * @returns True if function exists, false otherwise
    */
-  validateTool?(toolName: string): boolean;
+  validateFunction?(functionName: string): boolean;
 }
 
 // ============================================
@@ -118,15 +118,15 @@ export interface AgentExecutionContext extends ExecutionContext {
 }
 
 // ============================================
-// Tool Definition
+// Function Definition
 // ============================================
 
 /**
- * Definition of a tool that can be executed
+ * Definition of a function that can be executed
  */
-export interface ToolDefinition {
+export interface FunctionDefinition {
   /**
-   * Unique tool identifier (e.g., "documents:create")
+   * Unique function identifier (e.g., "documents:create")
    */
   name: string;
   
@@ -136,12 +136,12 @@ export interface ToolDefinition {
   title?: string;
   
   /**
-   * Tool description
+   * Function description
    */
   description?: string;
   
   /**
-   * Whether the tool requires content/instructions
+   * Whether the function requires content/instructions
    */
   contentRequirement?: 'required' | 'optional' | 'disabled';
   
@@ -150,64 +150,64 @@ export interface ToolDefinition {
    * @param params The parameters to validate
    * @returns Validation result
    */
-  validate(params: unknown): ToolValidationResult;
+  validate(params: unknown): FunctionValidationResult;
 }
 
-export type ToolValidationResult = 
+export type FunctionValidationResult = 
   | { success: true }
   | { success: false; errors: string[] };
 
 // ============================================
-// Tool Resolution & Execution
+// Function Resolution & Execution
 // ============================================
 
 /**
- * Interface for resolving tool definitions
+ * Interface for resolving function definitions
  */
-export interface ToolResolver {
+export interface FunctionResolver {
   /**
-   * Resolve a tool by name
-   * @param name Tool identifier
-   * @returns Tool definition or null if not found
+   * Resolve a function by name
+   * @param name Function identifier
+   * @returns Function definition or null if not found
    */
-  resolve(name: string): ToolDefinition | null;
+  resolve(name: string): FunctionDefinition | null;
   
   /**
-   * List all available tools
-   * @returns Array of tool names
+   * List all available functions
+   * @returns Array of function names
    */
   list?(): string[];
 }
 
 /**
- * Interface for executing tools
+ * Interface for executing functions
  */
-export interface ToolExecutor {
+export interface FunctionExecutor {
   /**
-   * Execute a tool with given parameters
-   * @param tool Tool name
-   * @param params Tool parameters (already validated)
+   * Execute a function with given parameters
+   * @param functionName Function name
+   * @param params Function parameters (already validated)
    * @param context Execution context
-   * @returns Tool execution result
+   * @returns Function execution result
    */
   execute(
-    tool: string, 
+    functionName: string, 
     params: Record<string, unknown>, 
-    context: ToolExecutionContext
-  ): Promise<ToolResult>;
+    context: FunctionExecutionContext
+  ): Promise<FunctionResult>;
 }
 
 /**
- * Context provided during tool execution
+ * Context provided during function execution
  */
-export interface ToolExecutionContext {
+export interface FunctionExecutionContext {
   /**
-   * Execution mode - where the tool is being executed from
+   * Execution mode - where the function is being executed from
    */
   mode: 'document' | 'agent';
   
   /**
-   * User executing the tool
+   * User executing the function
    */
   user: {
     id: string;
@@ -216,7 +216,7 @@ export interface ToolExecutionContext {
   };
   
   /**
-   * Instructions/content provided with the tool call
+   * Instructions/content provided with the function call
    */
   instructions?: string;
   
@@ -243,33 +243,33 @@ export interface ToolExecutionContext {
 }
 
 // ============================================
-// Tool Results
+// Function Results
 // ============================================
 
 /**
- * Result from tool execution
+ * Result from function execution
  */
-export interface ToolResult {
+export interface FunctionResult {
   success: boolean;
   data?: unknown;
-  error?: ToolError;
+  error?: FunctionError;
   /**
    * Human-readable message about the result
    */
   message?: string;
 }
 
-export interface ToolError {
+export interface FunctionError {
   code: string;
   message: string;
   details?: unknown;
 }
 
 /**
- * Helper class for creating tool results
+ * Helper class for creating function results
  */
-export class ToolResponse {
-  static success(data: unknown, message?: string): ToolResult {
+export class FunctionResponse {
+  static success(data: unknown, message?: string): FunctionResult {
     return {
       success: true,
       data,
@@ -277,12 +277,12 @@ export class ToolResponse {
     };
   }
   
-  static error(error: string | ToolError, details?: unknown): ToolResult {
+  static error(error: string | FunctionError, details?: unknown): FunctionResult {
     if (typeof error === 'string') {
       return {
         success: false,
         error: {
-          code: 'TOOL_ERROR',
+          code: 'FUNCTION_ERROR',
           message: error,
           details,
         },
@@ -294,7 +294,7 @@ export class ToolResponse {
     };
   }
   
-  static empty(): ToolResult {
+  static empty(): FunctionResult {
     return {
       success: true,
     };
@@ -344,27 +344,27 @@ export class ValidationError extends IdyllEngineError {
 }
 
 /**
- * Error during tool execution
+ * Error during function execution
  */
-export class ToolExecutionError extends IdyllEngineError {
+export class FunctionExecutionError extends IdyllEngineError {
   constructor(
     message: string,
-    public toolName: string,
+    public functionName: string,
     public nodeId?: string,
     details?: unknown
   ) {
-    super(message, 'TOOL_EXECUTION_ERROR', details);
-    this.name = 'ToolExecutionError';
+    super(message, 'FUNCTION_EXECUTION_ERROR', details);
+    this.name = 'FunctionExecutionError';
   }
 }
 
 /**
- * Error when a tool is not found
+ * Error when a function is not found
  */
-export class ToolNotFoundError extends IdyllEngineError {
-  constructor(toolName: string) {
-    super(`Tool not found: ${toolName}`, 'TOOL_NOT_FOUND', { toolName });
-    this.name = 'ToolNotFoundError';
+export class FunctionNotFoundError extends IdyllEngineError {
+  constructor(functionName: string) {
+    super(`Function not found: ${functionName}`, 'FUNCTION_NOT_FOUND', { functionName });
+    this.name = 'FunctionNotFoundError';
   }
 }
 

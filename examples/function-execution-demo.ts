@@ -1,28 +1,28 @@
 #!/usr/bin/env bun
 /**
- * Tool Execution Demo
+ * Function Execution Demo
  *
- * This script demonstrates custom tool execution with variables in the Idyll engine.
+ * This script demonstrates custom function execution with variables in the Idyll engine.
  * It shows:
- * 1. Defining custom tools with multiple steps
+ * 1. Defining custom functions with multiple steps
  * 2. Using variables that get resolved at runtime
- * 3. Tool execution returning full context
- * 4. How agents would use custom tools
+ * 3. Function execution returning full context
+ * 4. How agents would use custom functions
  *
- * Run with: bun run examples/tool-execution-demo.ts
+ * Run with: bun run examples/function-execution-demo.ts
  */
 
 import { z } from "zod";
-import { parseXML } from "../document/parser-grammar";
-import { createToolRegistry, defineTool } from "../document/tool-registry";
-import { executeCustomTool, parseCustomTool } from "../document/custom-tool-executor";
+import { parseXmlToAst } from "../document/parser-grammar";
+import { createFunctionRegistry, defineFunction } from "../document/function-registry";
+import { executeCustomFunction, parseCustomFunction } from "../document/custom-function-executor";
 
 // =============================================================================
-// STEP 1: Define base tools that custom tools will use
+// STEP 1: Define base functions that custom functions will use
 // =============================================================================
 
-const baseTools = createToolRegistry({
-  "web:search": defineTool({
+const baseFunctions = createFunctionRegistry({
+  "web:search": defineFunction({
     schema: z.object({
       maxResults: z.number().default(10),
     }),
@@ -45,7 +45,7 @@ const baseTools = createToolRegistry({
     },
   }),
 
-  "ai:summarize": defineTool({
+  "ai:summarize": defineFunction({
     schema: z.object({
       style: z.enum(["brief", "detailed", "bullet-points"]).default("brief"),
     }),
@@ -76,7 +76,7 @@ const baseTools = createToolRegistry({
     },
   }),
 
-  "data:format": defineTool({
+  "data:format": defineFunction({
     schema: z.object({
       format: z.enum(["json", "markdown", "plain"]).default("markdown"),
     }),
@@ -106,52 +106,52 @@ const baseTools = createToolRegistry({
 
 
 // =============================================================================
-// STEP 3: Demo custom tool with variables
+// STEP 3: Demo custom function with variables
 // =============================================================================
 
-const customToolXML = `<?xml version="1.0" encoding="UTF-8"?>
+const customFunctionXML = `<?xml version="1.0" encoding="UTF-8"?>
 <document>
-  <tool title="Research Assistant" icon="🔬">
-    <tool:description>
+  <function title="Research Assistant" icon="🔬">
+    <function:description>
       Searches for information and provides a formatted summary
-    </tool:description>
-    <tool:definition>
+    </function:description>
+    <function:definition>
       <!-- Step 1: Search the web -->
-      <fncall idyll-tool="web:search">
+      <fncall idyll-fn="web:search">
         <params><![CDATA[{"maxResults": 5}]]></params>
         <content>Search for <variable name="searchQuery" prompt="What to search for" /> 
                  from <variable name="timeframe" prompt="Time period (e.g., past month)" /></content>
       </fncall>
       
       <!-- Step 2: Summarize results -->
-      <fncall idyll-tool="ai:summarize">
+      <fncall idyll-fn="ai:summarize">
         <params><![CDATA[{"style": "bullet-points"}]]></params>
         <content>Summarize the search results focusing on <variable name="focusArea" prompt="What aspect to focus on" /></content>
       </fncall>
       
       <!-- Step 3: Format output -->
-      <fncall idyll-tool="data:format">
+      <fncall idyll-fn="data:format">
         <params><![CDATA[{"format": "markdown"}]]></params>
         <content>Research summary for <variable name="searchQuery" /></content>
       </fncall>
-    </tool:definition>
-  </tool>
+    </function:definition>
+  </function>
 </document>`;
 
 // =============================================================================
-// STEP 4: Main demo showing agent using custom tool
+// STEP 4: Main demo showing agent using custom function
 // =============================================================================
 
 async function main() {
-  console.log("🤖 Custom Tool Execution Demo\n");
-  console.log("This demonstrates how an agent would use a custom tool with variables.\n");
+  console.log("🤖 Custom Function Execution Demo\n");
+  console.log("This demonstrates how an agent would use a custom function with variables.\n");
   
   // -----------------------------
-  // Agent decides to use tool
+  // Agent decides to use function
   // -----------------------------
-  console.log("1️⃣  Agent receives request and decides to use custom tool");
+  console.log("1️⃣  Agent receives request and decides to use custom function");
   
-  // Agent provides context (would come from tool call in real scenario)
+  // Agent provides context (would come from function call in real scenario)
   const agentContext = `
     The user wants to know about recent AI breakthroughs,
     especially practical applications from the last month.
@@ -162,30 +162,30 @@ async function main() {
   console.log(`   Agent context: "${agentContext.trim()}"`);
   
   // -----------------------------
-  // Execute custom tool
+  // Execute custom function
   // -----------------------------
-  console.log("\n2️⃣  Executing custom tool with variable resolution");
+  console.log("\n2️⃣  Executing custom function with variable resolution");
   
-  // Parse the tool definition
-  const parsed = parseXML(customToolXML);
-  if (!("blocks" in parsed)) {
-    throw new Error("Invalid tool definition");
+  // Parse the function definition
+  const parsed = parseXmlToAst(customFunctionXML);
+  if (!("nodes" in parsed)) {
+    throw new Error("Invalid function definition");
   }
   
-  const toolBlock = parseCustomTool(parsed);
-  if (!toolBlock) {
-    throw new Error("No tool block found");
+  const functionBlock = parseCustomFunction(parsed);
+  if (!functionBlock) {
+    throw new Error("No function block found");
   }
   
-  const executionContext = await executeCustomTool(
-    toolBlock,
+  const executionContext = await executeCustomFunction(
+    functionBlock,
     { 
-      tools: baseTools,
+      functions: baseFunctions,
       agentContext,
     }
   );
   
-  console.log("\n✅ Tool execution complete!");
+  console.log("\n✅ Function execution complete!");
   console.log(`   Total duration: ${executionContext.metadata.duration}ms`);
   
   // -----------------------------
@@ -195,7 +195,7 @@ async function main() {
   console.log("━".repeat(50));
   
   console.log("\n📊 Metadata:");
-  console.log(`   Tool: ${executionContext.metadata.toolName}`);
+  console.log(`   Function: ${executionContext.metadata.functionName}`);
   console.log(`   Blocks executed: ${executionContext.metadata.blocksExecuted}`);
   console.log(`   Successful: ${executionContext.metadata.blocksSucceeded}`);
   console.log(`   Failed: ${executionContext.metadata.blocksFailed}`);
@@ -237,7 +237,7 @@ async function main() {
   console.log("\n💡 Key Insights:");
   console.log("━".repeat(50));
   console.log("• Variables were resolved based on agent context");
-  console.log("• Tool steps executed in sequence with context flow");
+  console.log("• Function steps executed in sequence with context flow");
   console.log("• Full execution context available for debugging");
   console.log("• Only relevant result needs to return to agent");
   console.log("• Subprocess isolation would prevent token bloat");

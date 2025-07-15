@@ -12,7 +12,7 @@ import chalk from "chalk";
 import { parseXmlToAst } from "../document/parser-grammar";
 import { AgentDocument } from "../document/ast";
 import { Agent } from "../agent/agent";
-import { createToolRegistry, defineTool } from "../document/tool-registry";
+import { createFunctionRegistry, defineFunction } from "../document/function-registry";
 import { Message } from "ai";
 import { z } from "zod";
 import path from "path";
@@ -29,8 +29,8 @@ let messages: Message[] = [];
 
 // Demo tools registry
 function createDemoTools() {
-  return createToolRegistry({
-    "demo:echo": defineTool({
+  return createFunctionRegistry({
+    "demo:echo": defineFunction({
       schema: z.object({
         message: z.string().describe("Message to echo"),
       }),
@@ -43,7 +43,7 @@ function createDemoTools() {
       },
     }),
 
-    "demo:calculate": defineTool({
+    "demo:calculate": defineFunction({
       schema: z.object({
         expression: z.string().describe("Math expression to evaluate"),
       }),
@@ -60,7 +60,7 @@ function createDemoTools() {
       },
     }),
 
-    "demo:time": defineTool({
+    "demo:time": defineFunction({
       schema: z.object({}),
       description: "Gets the current time",
       execute: async () => {
@@ -86,7 +86,8 @@ const commands = {
     console.log("  /clear             - Clear conversation history");
     console.log("  /memory            - Show agent memory");
     console.log("  /context           - Show agent context");
-    console.log("  /tools             - List available tools");
+    console.log("  /functions         - List available functions");
+    console.log("  /tools             - (Alias for /functions)");
     console.log("  /exit, /quit       - Exit the CLI");
     console.log("\nJust type a message to chat with the agent!\n");
   },
@@ -213,9 +214,9 @@ const commands = {
           }`
         );
       }
-      if (activity.toolCalls) {
+      if (activity.functionCalls) {
         console.log(
-          `  Tools: ${activity.toolCalls.map((tc) => tc.name).join(", ")}`
+          `  Functions: ${activity.functionCalls.map((tc) => tc.name).join(", ")}`
         );
       }
       if (activity.error) {
@@ -235,20 +236,22 @@ const commands = {
     console.log(JSON.stringify(context, null, 2));
   },
 
-  "/tools": () => {
+  "/functions": () => {
     if (!currentAgent) {
       console.log(chalk.red("No agent loaded"));
       return;
     }
 
-    const tools = createDemoTools();
-    console.log(chalk.cyan("\nAvailable Tools:"));
-    Object.entries(tools).forEach(([name, tool]) => {
+    const functions = createDemoTools();
+    console.log(chalk.cyan("\nAvailable Functions:"));
+    Object.entries(functions).forEach(([name, func]) => {
       console.log(
-        `  ${chalk.green(name)} - ${tool.description || "No description"}`
+        `  ${chalk.green(name)} - ${func.description || "No description"}`
       );
     });
   },
+
+  "/tools": () => commands["/functions"](),
 
   "/exit": () => {
     console.log(chalk.yellow("\nGoodbye! 👋"));

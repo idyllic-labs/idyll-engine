@@ -4,7 +4,7 @@
 
 import { Message, CoreTool, LanguageModelUsage, LanguageModel } from 'ai';
 import { AgentDocument } from '../document/ast';
-import type { ToolRegistry } from '../document/tool-registry';
+import type { FunctionRegistry } from '../document/function-registry';
 import type { ResponseMiddleware } from './response-pipeline';
 
 /**
@@ -18,7 +18,7 @@ export type AgentDefinition = AgentDocument;
 export interface AgentConfig {
   program: AgentDefinition;  // The agent program
   model: LanguageModel;      // AI runtime
-  tools: ToolRegistry;       // Tool runtime
+  functions: FunctionRegistry; // Function runtime
   responseMiddleware?: ResponseMiddleware[]; // Optional response processing middleware
 }
 
@@ -31,7 +31,7 @@ export interface AgentActivity {
   type: 'chat' | 'trigger' | 'tool';
   userMessage?: string;
   assistantMessage?: string;
-  toolCalls?: Array<{
+  functionCalls?: Array<{
     name: string;
     args: Record<string, any>;
     result?: any;
@@ -61,8 +61,8 @@ export interface AgentExecuteOptions {
   stream?: boolean;
   onFinish?: (result: {
     text: string;
-    toolCalls?: Array<{
-      toolName: string;
+    functionCalls?: Array<{
+      functionName: string;
       args: any;
       result?: any;
     }>;

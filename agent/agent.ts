@@ -16,20 +16,19 @@ import {
 } from "./types";
 import type { AgentDocument } from "../document/ast";
 import { ActivityMemory } from "./memory";
-import { ToolRegistry } from "../document/tool-registry";
+import { FunctionRegistry } from "../document/function-registry";
 import {
   NodeExecutionContext,
-  BlockExecutionContext,
 } from "../document/execution-types";
 import { v4 as uuidv4 } from "uuid";
 import { buildDetailedSystemPrompt } from "./system-prompt";
-import { extractCustomTools } from "./custom-tools";
-import { mergeToolRegistries } from "../document/tool-registry";
+import { extractCustomFunctions } from "./custom-functions";
+import { mergeFunctionRegistries } from "../document/function-registry";
 import { ResponsePipeline, ResponseMiddleware } from "./response-pipeline";
 import {
   toAzureFunctionName,
   fromAzureFunctionName,
-} from "../document/tool-naming";
+} from "../document/function-naming";
 
 /**
  * Agent class for executing conversations with tools
@@ -37,7 +36,7 @@ import {
 export class Agent {
   private program: AgentDefinition;
   private model: LanguageModel;
-  private tools: ToolRegistry;
+  private functions: FunctionRegistry;
   private memory: ActivityMemory;
   private context: AgentContext;
   private aiTools: Record<string, CoreTool> = {};
@@ -47,7 +46,7 @@ export class Agent {
   constructor(config: AgentConfig) {
     this.program = config.program;
     this.model = config.model;
-    this.tools = config.tools;
+    this.functions = config.functions;
 
     this.memory = new ActivityMemory();
     this.context = {
@@ -61,16 +60,16 @@ export class Agent {
       config.responseMiddleware.forEach((mw) => this.responsePipeline.use(mw));
     }
 
-    // Initialize AI tools from registry
+    // Initialize AI tools from function registry
     this.initializeTools();
   }
 
   /**
-   * Initialize tools for AI SDK
+   * Initialize tools for AI SDK (converts functions to AI tools)
    */
   private initializeTools() {
-    // Extract custom tools from agent program
-    const customTools = extractCustomTools(this.program, this.tools, () => {
+    // Extract custom functions from agent program
+    const customTools = extractCustomFunctions(this.program, this.functions, () => {
       // Get the last user message as agent context
       const lastUserMessage = this.currentMessages
         .filter((m) => m.role === "user")
@@ -80,20 +79,20 @@ export class Agent {
         : JSON.stringify(lastUserMessage?.content || "");
     });
 
-    // Merge base tools with custom tools
-    const allTools = mergeToolRegistries(this.tools, customTools);
+    // Merge base functions with custom functions
+    const allTools = mergeFunctionRegistries(this.functions, customTools);
 
-    // Convert all tools to AI SDK format
+    // Convert all functions to AI SDK tool format
     for (const [name, tool] of Object.entries(allTools)) {
-      // Transform tool name to be OpenAI-compatible using Azure adapter pattern
+      // Transform function name to be OpenAI-compatible using Azure adapter pattern
       const aiToolName = toAzureFunctionName(name);
 
-      // Create AI SDK tool wrapper
+      // Create AI SDK tool wrapper for the function
       this.aiTools[aiToolName] = {
         description: tool.description,
         parameters: tool.schema,
         execute: async (params: any) => {
-          console.log(`🔧 Executing tool: ${name}`);
+          console.log(`🔧 Executing function: ${name}`);
 
           // Create execution context
           const context: NodeExecutionContext = {
@@ -103,7 +102,7 @@ export class Agent {
           };
 
           try {
-            // Execute tool
+            // Execute function
             const content = params.content || "";
             delete params.content; // Remove content from params
 
@@ -111,21 +110,21 @@ export class Agent {
 
             // Process response through middleware pipeline
             const finalResult = await this.responsePipeline.process({
-              toolName: name,
+              functionName: name,
               params: params,
               result: result,
               messages: this.currentMessages.slice(-3),
             });
 
-            const isCustomTool = name.startsWith("custom:");
-            if (isCustomTool) {
-              console.log(`🎯 Custom tool ${name} executed and compressed`);
+            const isCustomFunction = name.startsWith("custom:");
+            if (isCustomFunction) {
+              console.log(`🎯 Custom function ${name} executed and compressed`);
             }
 
-            // Track tool call
+            // Track function call in activity memory
             this.memory.add({
               type: "tool",
-              toolCalls: [
+              functionCalls: [
                 {
                   name,
                   args: params,
@@ -142,7 +141,7 @@ export class Agent {
             // Track error
             this.memory.add({
               type: "tool",
-              toolCalls: [
+              functionCalls: [
                 {
                   name,
                   args: params,
@@ -163,11 +162,11 @@ export class Agent {
    */
   private getSystemPrompt(): string {
     const memoryContext = this.memory.formatForPrompt();
-    const toolNames = Object.keys(this.aiTools);
+    const functionNames = Object.keys(this.aiTools);
 
     const systemPrompt = buildDetailedSystemPrompt(
       this.program,
-      toolNames,
+      functionNames,
       memoryContext
     );
 
@@ -217,7 +216,7 @@ export class Agent {
       activity.assistantMessage = result.text;
       activity.usage = result.usage;
       if (result.toolCalls && result.toolCalls.length > 0) {
-        activity.toolCalls = result.toolCalls.map((tc) => ({
+        activity.functionCalls = result.toolCalls.map((tc) => ({
           name: tc.toolName,
           args: tc.args as Record<string, any>,
         }));
@@ -275,13 +274,13 @@ export class Agent {
         temperature: options?.temperature ?? 0.7,
         onFinish: async ({ text, toolCalls, usage, finishReason }) => {
           console.log(
-            `[Agent] 🎯 Final finish - reason: ${finishReason}, text length: ${text.length}, toolCalls: ${toolCalls?.length || 0}`
+            `[Agent] 🎯 Final finish - reason: ${finishReason}, text length: ${text.length}, functionCalls: ${toolCalls?.length || 0}`
           );
 
           // Update activity when stream finishes
           activity.assistantMessage = text;
           if (toolCalls && toolCalls.length > 0) {
-            activity.toolCalls = toolCalls.map((tc) => ({
+            activity.functionCalls = toolCalls.map((tc) => ({
               name: fromAzureFunctionName(tc.toolName),
               args: tc.args,
             }));
@@ -291,9 +290,9 @@ export class Agent {
           if (options?.onFinish) {
             await options.onFinish({
               text,
-              toolCalls: toolCalls?.map((tc) => ({
+              functionCalls: toolCalls?.map((tc) => ({
                 ...tc,
-                toolName: fromAzureFunctionName(tc.toolName),
+                functionName: fromAzureFunctionName(tc.toolName),
               })),
               usage,
               finishReason,

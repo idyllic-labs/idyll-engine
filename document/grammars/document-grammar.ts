@@ -22,7 +22,7 @@ export const DOCUMENT_GRAMMAR: Record<string, Rule> = {
   block: choice(
     'content-block',
     'executable-block', 
-    'tool-block'
+    'function-block'
   ),
 
   'content-block': choice(
@@ -90,7 +90,7 @@ export const DOCUMENT_GRAMMAR: Record<string, Rule> = {
   // Executable blocks
   'function-call': seq(
     terminal('fncall', {
-      'idyll-tool': {
+      'idyll-fn': {
         type: 'string',
         required: true,
         // Format: \"module:function\" or just \"function\" (e.g., \"demo:echo\", \"ai:analyzeText\", \"echo\")
@@ -123,21 +123,21 @@ export const DOCUMENT_GRAMMAR: Record<string, Rule> = {
     optional('content')
   ),
 
-  // Tool blocks
-  'tool-block': seq(
-    terminal('tool', {
+  // Function blocks (custom function definitions)
+  'function-block': seq(
+    terminal('function', {
       title: { type: 'string', required: true },
       icon: { type: 'string', required: false }
     }),
-    ref('tool-description'),
-    ref('tool-definition')
+    ref('function-description'),
+    ref('function-definition')
   ),
 
-  'tool-description': terminal('tool:description', {}, 'text'),
+  'function-description': terminal('function:description', {}, 'text'),
 
-  'tool-definition': seq(
-    terminal('tool:definition'),
-    zeroOrMore(choice('content-block', 'executable-block')) // no nested tools!
+  'function-definition': seq(
+    terminal('function:definition'),
+    zeroOrMore(choice('content-block', 'executable-block')) // no nested function blocks!
   ),
 
   // Function call children

@@ -1,34 +1,34 @@
 /**
- * Response compression for verbose tool outputs
+ * Response compression for verbose function outputs
  * 
  * Uses a mini model to intelligently extract relevant information
- * from complex tool execution contexts.
+ * from complex function execution contexts.
  */
 
 import { Message } from 'ai';
-import { ToolExecutionReport } from '../document/execution-types';
+import { FunctionExecutionReport } from '../document/execution-types';
 
 export interface CompressionContext {
-  toolName: string;
-  toolParams: Record<string, any>;
-  toolContent?: string;
+  functionName: string;
+  functionParams: Record<string, any>;
+  functionContent?: string;
   rawResponse: any;
   recentMessages: Message[];
 }
 
 /**
- * Compress verbose tool responses using AI
+ * Compress verbose function responses using AI
  */
-export async function compressToolResponse(
+export async function compressFunctionResponse(
   context: CompressionContext
 ): Promise<any> {
   // For non-complex responses, return as-is
   if (!isComplexResponse(context.rawResponse)) {
-    console.log(`📦 Response compressor: ${context.toolName} - No compression needed (simple response)`);
+    console.log(`📦 Response compressor: ${context.functionName} - No compression needed (simple response)`);
     return context.rawResponse;
   }
   
-  console.log(`🗜️  Response compressor: ${context.toolName} - Compressing verbose response...`);
+  console.log(`🗜️  Response compressor: ${context.functionName} - Compressing verbose response...`);
   
   // Build context summary
   const conversationContext = context.recentMessages
@@ -73,17 +73,17 @@ export async function compressToolResponse(
   if (context.rawResponse && typeof context.rawResponse === 'object') {
     // For objects, extract key fields or summarize
     if ('variables' in context.rawResponse && 'nodes' in context.rawResponse) {
-      // ToolExecutionReport - use basic summarizing strategy
-      const ctx = context.rawResponse as ToolExecutionReport;
+      // FunctionExecutionReport - use basic summarizing strategy
+      const ctx = context.rawResponse as FunctionExecutionReport;
       
       // Generate a human-readable message for the LLM
-      const toolName = ctx.metadata?.toolName || 'Custom tool';
+      const functionName = ctx.metadata?.functionName || 'Custom function';
       const nodesExecuted = ctx.metadata?.nodesExecuted || 0;
       const nodesSucceeded = ctx.metadata?.nodesSucceeded || 0;
       const nodesFailed = ctx.metadata?.nodesFailed || 0;
       
       // Build the summary message
-      let message = `${toolName} executed successfully.`;
+      let message = `${functionName} executed successfully.`;
       
       if (nodesExecuted > 0) {
         message += ` Completed ${nodesExecuted} operations`;
@@ -125,7 +125,7 @@ export async function compressToolResponse(
           nodesSucceeded,
           nodesFailed,
           variables: ctx.variables ? Object.fromEntries(ctx.variables) : {},
-          toolName
+          functionName
         }
       };
       
@@ -151,7 +151,7 @@ function isComplexResponse(response: unknown): boolean {
     return response.length > 2000; // Only compress very long strings
   }
   
-  // ToolExecutionContext is always complex
+  // FunctionExecutionReport is always complex
   if (response && typeof response === 'object') {
     if ('variables' in response && 'nodes' in response && 'metadata' in response) {
       return true;
@@ -167,9 +167,9 @@ function isComplexResponse(response: unknown): boolean {
  * Format response for AI consumption
  */
 function formatResponse(response: unknown): string {
-  // Special handling for ToolExecutionContext
+  // Special handling for FunctionExecutionReport
   if (response && typeof response === 'object' && 'nodes' in response) {
-    const ctx = response as ToolExecutionContext;
+    const ctx = response as FunctionExecutionReport;
     const parts: string[] = [];
     
     // Variables
@@ -195,7 +195,7 @@ function formatResponse(response: unknown): string {
     // Metadata
     if (ctx.metadata) {
       parts.push(`\nExecution summary:`);
-      parts.push(`  Tool: ${ctx.metadata.toolName}`);
+      parts.push(`  Function: ${ctx.metadata.functionName}`);
       parts.push(`  Nodes executed: ${ctx.metadata.nodesExecuted}`);
       parts.push(`  Succeeded: ${ctx.metadata.nodesSucceeded}`);
       parts.push(`  Failed: ${ctx.metadata.nodesFailed}`);

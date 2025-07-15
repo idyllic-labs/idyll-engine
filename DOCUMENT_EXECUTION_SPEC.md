@@ -11,7 +11,7 @@ Document execution is the process of running executable blocks (`<fncall>` eleme
 There are two primary execution contexts:
 
 1. **Document Context**: Executing blocks within a document editor
-2. **Tool Context**: When tools are invoked programmatically
+2. **Function Context**: When functions are invoked programmatically
 
 *Note: Agent mode is a special case where the agent system prompt is the document, but the document contents are considered like a prompt. This relationship to regular document execution needs further clarification.*
 
@@ -55,11 +55,11 @@ The engine maintains execution state externally rather than modifying the docume
 }
 ```
 
-## Tool Execution
+## Function Execution
 
-### Tool Input
+### Function Input
 
-When a tool executes, it receives:
+When a function executes, it receives:
 1. **Parameters**: From the `<params>` element
 2. **Content**: From the `<content>` element as instructions
 3. **Execution Context**: Access to previous block results and document state
@@ -67,34 +67,34 @@ When a tool executes, it receives:
 ### Block Context Access
 
 - Execution is sequential with linearly accruing context
-- Tools can access previous blocks' results through the execution context
+- Functions can access previous blocks' results through the execution context
 - The engine maintains awareness of the document structure
 - No non-linear references between blocks - purely sequential accumulation
 
 ### Execution Context Interface
 
 ```typescript
-interface BlockExecutionContext {
+interface NodeExecutionContext {
   currentBlockId: string;
   previousResults: OrderedMap<blockId, ExecutionResult>; // All results so far
   document: IdyllDocument; // Read-only reference
 }
 ```
 
-## Tool Resolution
+## Function Resolution
 
-The engine requires a way to resolve tool identifiers (e.g., `ai:generate-text`):
-- Host environment provides tool implementations
-- Engine stays agnostic to specific tool implementations
+The engine requires a way to resolve function identifiers (e.g., `ai:generate-text`):
+- Host environment provides function implementations
+- Engine stays agnostic to specific function implementations
 - Designed for convenient local testing without the complex module system
 
-### Tool Registration
+### Function Registration
 
-Minimal tool registration interface with Zod schema validation:
+Minimal function registration interface with Zod schema validation:
 
 ```typescript
 const engine = new Engine({
-  tools: {
+  functions: {
     'echo': {
       schema: z.object({
         message: z.string()
@@ -128,25 +128,25 @@ const engine = new Engine({
 ### Engine Responsibilities (Generic)
 - Manages document execution flow
 - Accumulates results in ordered map
-- Provides block context to tools
+- Provides block context to functions
 - Returns execution report
 - Validates parameters against schemas
 
 ### Host Responsibilities (Specific)
-- Provides tool implementations
+- Provides function implementations
 - Injects dependencies (database, file system, auth, etc.)
 - Decides what to do with execution results
 - Handles environment-specific concerns
 - Maps SaaS module system to simple execute functions
 
-### Tool Signature
+### Function Signature
 
-From the engine's perspective, tools are simple functions:
+From the engine's perspective, functions are simple functions:
 ```typescript
-type ToolExecutor = (
+type FunctionExecutor = (
   params: any,           // Validated against schema
   content: string,       // From <content> element
-  context: BlockExecutionContext & { api?: TApi }
+  context: NodeExecutionContext & { api?: TApi }
 ) => Promise<Result>;
 ```
 
@@ -158,42 +158,42 @@ The host environment handles creating these functions with whatever dependencies
 2. **Immutable Documents**: Original document is never modified during execution
 3. **External State**: Execution state is maintained separately from the document
 4. **Host Agnostic**: Engine has no knowledge of host-specific services
-5. **Simple Testing**: Easy to create tools programmatically for local testing
+5. **Simple Testing**: Easy to create functions programmatically for local testing
 6. **Type Safety**: Zod schemas provide static validation and type inference
 
-## Custom Tool Execution
+## Custom Function Execution
 
 ### Overview
 
-Custom tools are user-defined tools created with `<tool>` blocks within documents. These tools can contain:
+Custom functions are user-defined functions created with `<function>` blocks within documents. These functions can contain:
 - Multiple `<fncall>` blocks that execute in sequence
 - Variables that are resolved at runtime using AI interpolation
 - Rich content with inline elements (mentions, links, etc.)
 
-### Custom Tool Definition
+### Custom Function Definition
 
 ```xml
-<tool title="Search The Web" icon="🔍">
-  <tool:description>Searches for information on the web about a topic</tool:description>
-  <tool:definition>
-    <fncall idyll-tool="web:search">
+<function title="Search The Web" icon="🔍">
+  <function:description>Searches for information on the web about a topic</function:description>
+  <function:definition>
+    <fncall idyll-fn="web:search">
       <content>Search for <variable name="searchQuery" prompt="What to search for" /> 
                from <variable name="timeframe" prompt="Time period (optional)" /></content>
     </fncall>
-    <fncall idyll-tool="ai:summarize">
+    <fncall idyll-fn="ai:summarize">
       <content>Summarize the search results focusing on <variable name="focusArea" /></content>
     </fncall>
-  </tool:definition>
-</tool>
+  </function:definition>
+</function>
 ```
 
 ### Agent Integration
 
-When agents use custom tools:
+When agents use custom functions:
 
-1. **Tool Visibility**: Agents see only the tool name and description, not the internal definition
-2. **Tool Matching**: Tools are matched probabilistically by name ("Search The Web" matches the tool above)
-3. **Context Provision**: Agents provide context as rich inline content when invoking tools
+1. **Function Visibility**: Agents see only the function name and description, not the internal definition
+2. **Function Matching**: Functions are matched probabilistically by name ("Search The Web" matches the function above)
+3. **Context Provision**: Agents provide context as rich inline content when invoking functions
 
 ### Variable System
 
@@ -202,8 +202,8 @@ When agents use custom tools:
 Variables are "AI-native parameters" - loosely typed strings resolved at runtime using AI interpolation.
 
 **Resolution Context**:
-- **Agent hints**: The inline content the agent provides when calling the tool
-- **Document context**: Surrounding blocks/content where the tool is executed
+- **Agent hints**: The inline content the agent provides when calling the function
+- **Document context**: Surrounding blocks/content where the function is executed
 - **Variable prompts**: The prompt strings defined on each variable
 - **Inherited context**: All context from the parent agent (by default)
 
@@ -212,17 +212,17 @@ Variables are "AI-native parameters" - loosely typed strings resolved at runtime
 Variables follow a declare-once, use-many pattern:
 
 ```xml
-<tool:definition>
+<function:definition>
   <!-- First occurrence declares and resolves the variable -->
-  <fncall idyll-tool="web:search">
+  <fncall idyll-fn="web:search">
     <content>Search for <variable name="topic" prompt="Main search topic" /></content>
   </fncall>
   
   <!-- Subsequent uses reference the already-resolved value -->
-  <fncall idyll-tool="ai:summarize">
+  <fncall idyll-fn="ai:summarize">
     <content>Summarize results about <variable name="topic" /></content>
   </fncall>
-</tool:definition>
+</function:definition>
 ```
 
 **Rules**:
@@ -230,19 +230,19 @@ Variables follow a declare-once, use-many pattern:
 - The AI interpolation happens only on first declaration
 - Subsequent uses reference the resolved value
 - Redeclaration (same name, different prompt) is an error
-- Variables are scoped to the tool execution context
+- Variables are scoped to the function execution context
 
 #### Variable Interpolation Flow
 
-1. **Agent invokes tool** with context:
+1. **Agent invokes function** with context:
    ```typescript
    {
-     tool: "Search The Web",
+     function: "Search The Web",
      content: "Find information about <mention:topic>AI breakthroughs</mention:topic> from last month"
    }
    ```
 
-2. **System extracts variables** from tool definition:
+2. **System extracts variables** from function definition:
    - `searchQuery` (prompt: "What to search for")
    - `timeframe` (prompt: "Time period (optional)")
    - `focusArea` (no prompt provided)
@@ -260,13 +260,13 @@ Variables follow a declare-once, use-many pattern:
 
 #### Context Inheritance
 
-By default, custom tools inherit all context from the invoking agent:
+By default, custom functions inherit all context from the invoking agent:
 - Agent personality and tone
 - Current conversation context
 - Document being processed
-- Previous tool execution results
+- Previous function execution results
 
-This creates a "class/method" pattern where the agent is like a class and tool invocations are method calls that have access to the instance context.
+This creates a "class/method" pattern where the agent is like a class and function invocations are method calls that have access to the instance context.
 
 ### Design Principles
 
@@ -276,12 +276,12 @@ This creates a "class/method" pattern where the agent is like a class and tool i
 4. **Context-Aware**: Full context inheritance by default
 5. **Runtime Resolution**: Variables resolved at execution time, not definition time
 
-### Tool Execution Return Value
+### Function Execution Return Value
 
-When a custom tool executes, the engine returns a complete execution context rather than a single result:
+When a custom function executes, the engine returns a complete execution context rather than a single result:
 
 ```typescript
-interface ToolExecutionContext {
+interface FunctionExecutionReport {
   // All resolved variables
   variables: Map<string, string>;
   
@@ -290,15 +290,15 @@ interface ToolExecutionContext {
   
   // Execution metadata
   metadata: {
-    toolName: string;
+    functionName: string;
     duration: number;
     blocksExecuted: number;
     blocksSucceeded: number;
     blocksFailed: number;
   };
   
-  // The tool definition for reference
-  toolDefinition: ToolBlock;
+  // The function definition for reference
+  functionDefinition: FunctionNode;
 }
 ```
 
@@ -310,13 +310,13 @@ This structure:
 
 ### Subprocess Execution Model (Future)
 
-For agent integration, custom tool execution will use an agentic subprocess pattern:
+For agent integration, custom function execution will use an agentic subprocess pattern:
 
-1. **Main agent** receives request to use custom tool
+1. **Main agent** receives request to use custom function
 2. **Subprocess spawned** with isolated context
 3. **Subprocess**:
    - Loads necessary resources (e.g., full documents with IDs)
-   - Executes the tool in isolation
+   - Executes the function in isolation
    - Returns only relevant results
 4. **Main agent** continues with subprocess results
 
@@ -326,8 +326,8 @@ Benefits:
 - Proper resource loading and ID resolution
 - Cost-effective (subprocess context doesn't accumulate in main thread)
 
-**Cost Efficiency Example**: Consider a complex "Research Assistant" tool that makes 10 different web searches, calls multiple AI summarizers, and processes results. If all these inner tool calls were added to the main agent's context:
-- Every subsequent user message would include all 10+ tool call histories
+**Cost Efficiency Example**: Consider a complex "Research Assistant" function that makes 10 different web searches, calls multiple AI summarizers, and processes results. If all these inner function calls were added to the main agent's context:
+- Every subsequent user message would include all 10+ function call histories
 - Token costs would compound exponentially in long conversations
 - Most of that context would be irrelevant to future interactions
 
@@ -340,14 +340,14 @@ With subprocess isolation:
 ### Implementation Notes
 
 - Variable interpolation should be a core part of the engine
-- The system should parse tool definitions to identify variables
-- Agents should be informed which variables a tool uses (but not how)
+- The system should parse function definitions to identify variables
+- Agents should be informed which variables a function uses (but not how)
 - Variables are essentially "inline content generators" - like inline `ai:generateText` with ambient context
 - Future enhancement: optional variable types/schemas for more control
 
-## Tool Naming Conventions
+## Function Naming Conventions
 
-Idyll tools use a `module:function` naming pattern where both parts MUST be valid JavaScript identifiers. This ensures clean, unambiguous transformations when deploying to platforms like Azure Functions.
+Idyll functions use a `module:function` naming pattern where both parts MUST be valid JavaScript identifiers. This ensures clean, unambiguous transformations when deploying to platforms like Azure Functions.
 
 ### Naming Pattern
 
@@ -364,23 +364,23 @@ module:function
 All module and function names MUST be valid JavaScript identifiers:
 
 ```xml
-<fncall idyll-tool="demo:echo" />
-<fncall idyll-tool="ai:analyzeText" />
-<fncall idyll-tool="search:findDocuments" />
-<fncall idyll-tool="webhook:githubPush" />
+<fncall idyll-fn="demo:echo" />
+<fncall idyll-fn="ai:analyzeText" />
+<fncall idyll-fn="search:findDocuments" />
+<fncall idyll-fn="webhook:githubPush" />
 ```
 
 **Invalid** (No Longer Supported):
 ```xml
 <!-- ❌ Kebab-case is NOT allowed -->
-<fncall idyll-tool="ai:analyze-text" />
-<fncall idyll-tool="data:process-csv" />
+<fncall idyll-fn="ai:analyze-text" />
+<fncall idyll-fn="data:process-csv" />
 ```
 
 **Root-Level Functions** (without module namespace):
 ```xml
-<fncall idyll-tool="echo" />
-<fncall idyll-tool="processData" />
+<fncall idyll-fn="echo" />
+<fncall idyll-fn="processData" />
 ```
 
 ### Azure Functions Transformation

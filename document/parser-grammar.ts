@@ -299,22 +299,22 @@ function parseNode(element: xml2js.Element): Node | null {
       return parseFunctionCall(element, id, attrs);
     case "trigger":
       return parseTrigger(element, id, attrs);
-    case "tool":
-      return parseTool(element, id, attrs);
+    case "function":
+      return parseFunction(element, id, attrs);
     default:
       return parseContentNode(element, id, attrs, elementType);
   }
 }
 
 /**
- * Parse function call block
+ * Parse function call node
  */
 function parseFunctionCall(
   element: xml2js.Element,
   id: string,
   attrs: Record<string, unknown>
 ): ExecutableNode {
-  const tool = attrs["idyll-tool"] as string;
+  const functionName = attrs["idyll-fn"] as string;
 
   let parameters: Record<string, unknown> = {};
   let content: RichContent[] = [];
@@ -356,7 +356,7 @@ function parseFunctionCall(
   return {
     id,
     type: "function_call",
-    tool,
+    fn: functionName,
     parameters,
     content: content.length > 0 ? content : undefined,
     result: result ? { success: true, data: result } : undefined,
@@ -367,14 +367,14 @@ function parseFunctionCall(
 }
 
 /**
- * Parse trigger block
+ * Parse trigger node
  */
 function parseTrigger(
   element: xml2js.Element,
   id: string,
   attrs: Record<string, unknown>
 ): ExecutableNode {
-  const tool = attrs["idyll-trigger"] as string;
+  const functionName = attrs["idyll-trigger"] as string;
   const enabled = attrs.enabled !== false;
 
   let parameters: Record<string, unknown> = {};
@@ -404,7 +404,7 @@ function parseTrigger(
   return {
     id,
     type: "trigger",
-    tool,
+    fn: functionName,
     parameters,
     content: content.length > 0 ? content : undefined,
     metadata: { enabled },
@@ -412,14 +412,14 @@ function parseTrigger(
 }
 
 /**
- * Parse tool block
+ * Parse function node
  */
-function parseTool(
+function parseFunction(
   element: xml2js.Element,
   id: string,
   attrs: Record<string, unknown>
 ): ContentNode {
-  // Tools are stored as content blocks with special props
+  // Functions are stored as content nodes with special props
   const title = attrs.title as string;
   const icon = attrs.icon as string;
 
@@ -429,17 +429,17 @@ function parseTool(
   for (const child of element.elements || []) {
     if (child.type === "element" && child.name) {
       switch (child.name) {
-        case "tool:description":
+        case "function:description":
           description = extractTextContent(child);
           break;
 
-        case "tool:definition":
-          // Parse blocks within tool definition
+        case "function:definition":
+          // Parse nodes within function definition
           for (const defChild of child.elements || []) {
             if (defChild.type === "element" && defChild.name) {
-              // Check that it's not another tool (grammar constraint)
-              if (compiled.elementToType[defChild.name] === "tool") {
-                throw new ParseError("Tools cannot contain other tools");
+              // Check that it's not another function (grammar constraint)
+              if (compiled.elementToType[defChild.name] === "function") {
+                throw new ParseError("Functions cannot contain other functions");
               }
 
               const node = parseNode(defChild);
@@ -455,7 +455,7 @@ function parseTool(
 
   return {
     id,
-    type: "tool" as ContentNodeType,
+    type: "function" as ContentNodeType,
     content: [{ type: "text", text: description }],
     children: definition.length > 0 ? definition : undefined,
     props: { title, icon },
@@ -463,7 +463,7 @@ function parseTool(
 }
 
 /**
- * Parse content block
+ * Parse content node
  */
 function parseContentNode(
   element: xml2js.Element,
@@ -473,7 +473,7 @@ function parseContentNode(
 ): ContentNode {
   const content = parseRichContent(element);
 
-  // Parse children for nested blocks
+  // Parse children for nested nodes
   const children: Node[] = [];
   for (const child of element.elements || []) {
     if (child.type === "element" && child.name) {
@@ -743,23 +743,23 @@ function serializeDiffDocument(document: DiffDocument): xml2js.Element {
 }
 
 /**
- * Serialize a block to XML element
+ * Serialize a node to XML element
  */
 function serializeNode(node: Node): xml2js.Element {
   if (isExecutableNode(node)) {
     return serializeExecutableNode(node);
   }
 
-  // Special handling for tool nodes
-  if (node.type === "tool") {
-    return serializeToolNode(node);
+  // Special handling for function nodes
+  if (node.type === "function") {
+    return serializeFunctionNode(node);
   }
 
   return serializeContentNode(node);
 }
 
 /**
- * Serialize executable block
+ * Serialize executable node
  */
 function serializeExecutableNode(node: ExecutableNode): xml2js.Element {
   const elements: xml2js.Element[] = [];
@@ -807,7 +807,7 @@ function serializeExecutableNode(node: ExecutableNode): xml2js.Element {
       name: "fncall",
       attributes: {
         id: node.id,
-        "idyll-tool": node.tool,
+        "idyll-fn": node.fn,
         ...(node.metadata?.modelId && { modelId: node.metadata.modelId }),
       },
       elements,
@@ -818,7 +818,7 @@ function serializeExecutableNode(node: ExecutableNode): xml2js.Element {
       name: "trigger",
       attributes: {
         id: node.id,
-        "idyll-trigger": node.tool,
+        "idyll-trigger": node.fn,
         enabled: String(node.metadata?.enabled !== false),
       },
       elements,
@@ -827,9 +827,9 @@ function serializeExecutableNode(node: ExecutableNode): xml2js.Element {
 }
 
 /**
- * Serialize tool block
+ * Serialize function node
  */
-function serializeToolNode(node: ContentNode): xml2js.Element {
+function serializeFunctionNode(node: ContentNode): xml2js.Element {
   const elements: xml2js.Element[] = [];
 
   // Add description
@@ -839,7 +839,7 @@ function serializeToolNode(node: ContentNode): xml2js.Element {
 
   elements.push({
     type: "element",
-    name: "tool:description",
+    name: "function:description",
     elements: [{ type: "text", text: description }],
   });
 
@@ -847,7 +847,7 @@ function serializeToolNode(node: ContentNode): xml2js.Element {
   if (node.children && node.children.length > 0) {
     elements.push({
       type: "element",
-      name: "tool:definition",
+      name: "function:definition",
       elements: node.children.map(serializeNode),
     });
   }
@@ -863,14 +863,14 @@ function serializeToolNode(node: ContentNode): xml2js.Element {
 
   return {
     type: "element",
-    name: "tool",
+    name: "function",
     attributes,
     elements,
   };
 }
 
 /**
- * Serialize content block
+ * Serialize content node
  */
 function serializeContentNode(node: ContentNode): xml2js.Element {
   const elements = [

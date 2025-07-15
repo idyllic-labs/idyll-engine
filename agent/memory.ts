@@ -72,8 +72,8 @@ export class ActivityMemory {
         parts.push(`Assistant: "${activity.assistantMessage.substring(0, 100)}${activity.assistantMessage.length > 100 ? '...' : ''}"`);
       }
       
-      if (activity.toolCalls && activity.toolCalls.length > 0) {
-        parts.push(`Tools: ${activity.toolCalls.map(tc => tc.name).join(', ')}`);
+      if (activity.functionCalls && activity.functionCalls.length > 0) {
+        parts.push(`Functions: ${activity.functionCalls.map(tc => tc.name).join(', ')}`);
       }
       
       if (activity.error) {

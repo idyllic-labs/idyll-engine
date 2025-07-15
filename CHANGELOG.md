@@ -1,5 +1,123 @@
 # Changelog
 
+## [4.0.0] - 2025-07-15
+
+### 💥 BREAKING: Tool → Function Terminology Refactor
+
+This major release completes the terminology refactor from "tools" to "functions" throughout the codebase, establishing a clear separation between Idyll document functions and AI agent tools.
+
+#### Breaking Changes
+
+**🔥 All Tool-related APIs Renamed:**
+- `createToolRegistry()` → `createFunctionRegistry()`
+- `defineFunction()` replaces `defineTool()`
+- `ToolDefinition` → `FunctionDefinition`
+- `ToolExecutor` → `FunctionExecutor`
+- `ToolResult` → `FunctionResult`
+- `ToolRegistry` → `FunctionRegistry`
+- `validateToolName()` → `validateFunctionName()`
+- `toAzureToolName()` → `toAzureFunctionName()`
+- `fromAzureToolName()` → `fromAzureFunctionName()`
+
+**📁 File Renames:**
+- `document/tool-registry.ts` → `document/function-registry.ts`
+- `document/tool-naming.ts` → `document/function-naming.ts`
+- `document/custom-tool-executor.ts` → `document/custom-function-executor.ts`
+- `agent/custom-tools.ts` → `agent/custom-functions.ts`
+
+**🏷️ XML Attribute Changes:**
+- `<fncall idyll-tool="...">` → `<fncall idyll-fn="...">`
+- `<tool>` blocks → `<function>` blocks
+- `<tool:description>` → `<function:description>`
+- `<tool:definition>` → `<function:definition>`
+
+**🔧 AST Changes:**
+- `ExecutableNode.function` → `ExecutableNode.fn` (avoids JS keyword conflict)
+- All references to `.function` property now use `.fn`
+
+#### Conceptual Separation
+
+**Functions** (Idyll Document Level):
+- Executable units within documents
+- Defined with `defineFunction()` and registered in `FunctionRegistry`
+- Called via `<fncall idyll-fn="...">` blocks
+- Pure document execution concept
+
+**Tools** (AI Agent Level):
+- AI model capabilities exposed through Vercel AI SDK
+- Functions are converted TO tools for AI agents
+- Agent system uses "tools" terminology for AI SDK compatibility
+- Clear adapter pattern: functions → tools for agents
+
+#### Migration Guide
+
+1. **Update imports:**
+   ```typescript
+   // Before
+   import { createToolRegistry, defineTool } from '@idyllic/idyll-engine';
+   
+   // After
+   import { createFunctionRegistry, defineFunction } from '@idyllic/idyll-engine';
+   ```
+
+2. **Update function definitions:**
+   ```typescript
+   // Before
+   const tools = createToolRegistry({
+     'demo:echo': defineTool({ ... })
+   });
+   
+   // After
+   const functions = createFunctionRegistry({
+     'demo:echo': defineFunction({ ... })
+   });
+   ```
+
+3. **Update XML attributes:**
+   ```xml
+   <!-- Before -->
+   <fncall idyll-tool="demo:echo">
+   
+   <!-- After -->
+   <fncall idyll-fn="demo:echo">
+   ```
+
+4. **Update custom function blocks:**
+   ```xml
+   <!-- Before -->
+   <tool title="My Tool">
+     <tool:description>...</tool:description>
+     <tool:definition>...</tool:definition>
+   </tool>
+   
+   <!-- After -->
+   <function title="My Function">
+     <function:description>...</function:description>
+     <function:definition>...</function:definition>
+   </function>
+   ```
+
+5. **Update AST property access:**
+   ```typescript
+   // Before
+   if (node.type === 'function_call') {
+     console.log(node.function);
+   }
+   
+   // After
+   if (node.type === 'function_call') {
+     console.log(node.fn);
+   }
+   ```
+
+#### Why This Change?
+
+The terminology was causing confusion between:
+- Document-level executable functions (what we call)
+- AI-level tool calling (how agents interact)
+
+This refactor creates a clean separation where "functions" are the pure concept in Idyll documents, and "tools" are specifically the AI agent capability exposed through the Vercel AI SDK.
+
 ## [3.1.0] - 2025-07-14
 
 ### ✨ Features
@@ -94,7 +212,7 @@ if (isContentNode(node)) { /* ... */ }
 - Same parsing and serialization capabilities
 - Same diff operation types and behavior
 - Same agent system functionality
-- Same tool execution system
+- Same function execution system
 
 #### Migration Guide
 

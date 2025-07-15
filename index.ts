@@ -13,28 +13,33 @@ export { parseXmlToAst, serializeAstToXml } from './document/parser-grammar';
 // Document execution
 export { DocumentExecutor } from './document/executor';
 export * from './document/execution-types';
-export { createToolRegistry, defineTool, mergeToolRegistries, createSimpleRegistry } from './document/tool-registry';
+export { 
+  createFunctionRegistry, 
+  defineFunction, 
+  mergeFunctionRegistries, 
+  createSimpleRegistry
+} from './document/function-registry';
 
-// Tool naming utilities
+// Function naming utilities
 export { 
   toAzureFunctionName, 
   fromAzureFunctionName, 
-  validateToolName, 
-  parseToolName, 
-  buildToolName 
-} from './document/tool-naming';
+  validateFunctionName, 
+  parseFunctionName, 
+  buildFunctionName
+} from './document/function-naming';
 
 // Document validation
 export { validateDocument, formatValidationIssues } from './document/validator';
 
-// Legacy types (for backward compatibility)
+// Core types
 export { 
   type ValidationContext,
   type ExecutionContext,
-  type ToolResult,
-  type ToolResolver,
-  type ToolExecutor as LegacyToolExecutor,
-  type ToolDefinition as LegacyToolDefinition,
+  type FunctionResult,
+  type FunctionResolver,
+  type FunctionExecutor,
+  type FunctionDefinition as CoreFunctionDefinition,
 } from './types';
 
 // Grammar system (for advanced usage)
@@ -44,8 +49,8 @@ export { GrammarCompiler } from './document/grammar-compiler';
 // Variable resolution system
 export * from './document/variable-resolution';
 
-// Custom tool execution
-export * from './document/custom-tool-executor';
+// Custom function execution
+export * from './document/custom-function-executor';
 
 // Diff system
 export { applyDiff } from './document/diff-applier';

@@ -154,7 +154,7 @@ var DOCUMENT_GRAMMAR = {
   block: choice(
     "content-block",
     "executable-block",
-    "tool-block"
+    "function-block"
   ),
   "content-block": choice(
     "paragraph",
@@ -212,7 +212,7 @@ var DOCUMENT_GRAMMAR = {
   // Executable blocks
   "function-call": seq(
     terminal("fncall", {
-      "idyll-tool": {
+      "idyll-fn": {
         type: "string",
         required: true,
         // Format: \"module:function\" or just \"function\" (e.g., \"demo:echo\", \"ai:analyzeText\", \"echo\")
@@ -243,20 +243,20 @@ var DOCUMENT_GRAMMAR = {
     optional("params"),
     optional("content")
   ),
-  // Tool blocks
-  "tool-block": seq(
-    terminal("tool", {
+  // Function blocks (custom function definitions)
+  "function-block": seq(
+    terminal("function", {
       title: { type: "string", required: true },
       icon: { type: "string", required: false }
     }),
-    ref("tool-description"),
-    ref("tool-definition")
+    ref("function-description"),
+    ref("function-definition")
   ),
-  "tool-description": terminal("tool:description", {}, "text"),
-  "tool-definition": seq(
-    terminal("tool:definition"),
+  "function-description": terminal("function:description", {}, "text"),
+  "function-definition": seq(
+    terminal("function:definition"),
     zeroOrMore(choice("content-block", "executable-block"))
-    // no nested tools!
+    // no nested function blocks!
   ),
   // Function call children
   params: seq(
@@ -577,8 +577,8 @@ var GrammarCompiler = class {
       "bulletlistitem": "bulletListItem",
       "numberedlistitem": "numberedListItem",
       "checklistitem": "checklistItem",
-      "tool:description": "_tool_description",
-      "tool:definition": "_tool_definition"
+      "function:description": "_function_description",
+      "function:definition": "_function_definition"
     };
     return typeMap[element] || element.replace(/[:-]/g, "_");
   }
@@ -586,7 +586,7 @@ var GrammarCompiler = class {
    * Check if a rule represents a block element
    */
   isBlockRule(ruleName) {
-    return ruleName.includes("block") || ruleName === "paragraph" || ruleName === "heading" || ruleName === "list" || ruleName === "code" || ruleName === "quote" || ruleName === "separator" || ruleName === "tool-block";
+    return ruleName.includes("block") || ruleName === "paragraph" || ruleName === "heading" || ruleName === "list" || ruleName === "code" || ruleName === "quote" || ruleName === "separator" || ruleName === "function-block";
   }
   /**
    * Check if a rule represents an inline element
@@ -599,7 +599,7 @@ var GrammarCompiler = class {
    */
   findRuleByType(astType) {
     const ruleMap = {
-      "tool": "tool-block",
+      "function": "function-block",
       "list": "list",
       "function_call": "function-call",
       "trigger": "trigger"
@@ -890,14 +890,14 @@ function parseNode(element) {
       return parseFunctionCall(element, id, attrs);
     case "trigger":
       return parseTrigger(element, id, attrs);
-    case "tool":
-      return parseTool(element, id, attrs);
+    case "function":
+      return parseFunction(element, id, attrs);
     default:
       return parseContentNode(element, id, attrs, elementType);
   }
 }
 function parseFunctionCall(element, id, attrs) {
-  const tool = attrs["idyll-tool"];
+  const functionName = attrs["idyll-fn"];
   let parameters = {};
   let content = [];
   let result;
@@ -933,7 +933,7 @@ function parseFunctionCall(element, id, attrs) {
   return {
     id,
     type: "function_call",
-    tool,
+    fn: functionName,
     parameters,
     content: content.length > 0 ? content : void 0,
     result: result ? { success: true, data: result } : void 0,
@@ -943,7 +943,7 @@ function parseFunctionCall(element, id, attrs) {
   };
 }
 function parseTrigger(element, id, attrs) {
-  const tool = attrs["idyll-trigger"];
+  const functionName = attrs["idyll-trigger"];
   const enabled = attrs.enabled !== false;
   let parameters = {};
   let content = [];
@@ -969,13 +969,13 @@ function parseTrigger(element, id, attrs) {
   return {
     id,
     type: "trigger",
-    tool,
+    fn: functionName,
     parameters,
     content: content.length > 0 ? content : void 0,
     metadata: { enabled }
   };
 }
-function parseTool(element, id, attrs) {
+function parseFunction(element, id, attrs) {
   const title = attrs.title;
   const icon = attrs.icon;
   let description = "";
@@ -983,14 +983,14 @@ function parseTool(element, id, attrs) {
   for (const child of element.elements || []) {
     if (child.type === "element" && child.name) {
       switch (child.name) {
-        case "tool:description":
+        case "function:description":
           description = extractTextContent(child);
           break;
-        case "tool:definition":
+        case "function:definition":
           for (const defChild of child.elements || []) {
             if (defChild.type === "element" && defChild.name) {
-              if (compiled.elementToType[defChild.name] === "tool") {
-                throw new ParseError("Tools cannot contain other tools");
+              if (compiled.elementToType[defChild.name] === "function") {
+                throw new ParseError("Functions cannot contain other functions");
               }
               const node = parseNode(defChild);
               if (node) {
@@ -1004,7 +1004,7 @@ function parseTool(element, id, attrs) {
   }
   return {
     id,
-    type: "tool",
+    type: "function",
     content: [{ type: "text", text: description }],
     children: definition.length > 0 ? definition : void 0,
     props: { title, icon }
@@ -1218,8 +1218,8 @@ function serializeNode(node) {
   if (isExecutableNode(node)) {
     return serializeExecutableNode(node);
   }
-  if (node.type === "tool") {
-    return serializeToolNode(node);
+  if (node.type === "function") {
+    return serializeFunctionNode(node);
   }
   return serializeContentNode(node);
 }
@@ -1262,7 +1262,7 @@ function serializeExecutableNode(node) {
       name: "fncall",
       attributes: {
         id: node.id,
-        "idyll-tool": node.tool,
+        "idyll-fn": node.fn,
         ...node.metadata?.modelId && { modelId: node.metadata.modelId }
       },
       elements
@@ -1273,25 +1273,25 @@ function serializeExecutableNode(node) {
       name: "trigger",
       attributes: {
         id: node.id,
-        "idyll-trigger": node.tool,
+        "idyll-trigger": node.fn,
         enabled: String(node.metadata?.enabled !== false)
       },
       elements
     };
   }
 }
-function serializeToolNode(node) {
+function serializeFunctionNode(node) {
   const elements = [];
   const description = node.content.map((c) => isTextContent(c) ? c.text : "").join("");
   elements.push({
     type: "element",
-    name: "tool:description",
+    name: "function:description",
     elements: [{ type: "text", text: description }]
   });
   if (node.children && node.children.length > 0) {
     elements.push({
       type: "element",
-      name: "tool:definition",
+      name: "function:definition",
       elements: node.children.map(serializeNode)
     });
   }
@@ -1304,7 +1304,7 @@ function serializeToolNode(node) {
   }
   return {
     type: "element",
-    name: "tool",
+    name: "function",
     attributes,
     elements
   };
@@ -1549,7 +1549,7 @@ var DocumentExecutor = class {
    */
   async execute(request) {
     if (request.mode === "single") {
-      return this.executeSingleNode(request.document, request.nodeId || request.blockId);
+      return this.executeSingleNode(request.document, request.nodeId);
     } else {
       return this.executeDocument(request.document);
     }
@@ -1560,7 +1560,7 @@ var DocumentExecutor = class {
   async executeDocument(document) {
     const startTime = /* @__PURE__ */ new Date();
     const state = /* @__PURE__ */ new Map();
-    const executableNodes = this.findExecutableNodes(document.nodes || document.blocks);
+    const executableNodes = this.findExecutableNodes(document.nodes);
     const total = executableNodes.length;
     for (let i = 0; i < executableNodes.length; i++) {
       const node = executableNodes[i];
@@ -1628,13 +1628,13 @@ var DocumentExecutor = class {
   async executeNode(node, context) {
     const startTime = Date.now();
     try {
-      const tool = this.options.tools[node.tool];
-      if (!tool) {
-        throw new Error(`Tool not found: ${node.tool}`);
+      const func = this.options.functions[node.fn];
+      if (!func) {
+        throw new Error(`Function not found: ${node.fn}`);
       }
       let validatedParams;
       try {
-        validatedParams = tool.schema.parse(node.parameters);
+        validatedParams = func.schema.parse(node.parameters);
       } catch (error) {
         if (error instanceof z.ZodError) {
           throw new Error(`Invalid parameters: ${error.errors.map((e) => e.message).join(", ")}`);
@@ -1646,7 +1646,7 @@ var DocumentExecutor = class {
         setTimeout(() => reject(new Error("Execution timeout")), this.options.timeout);
       });
       const data = await Promise.race([
-        tool.execute(validatedParams, content, context),
+        func.execute(validatedParams, content, context),
         timeoutPromise
       ]);
       return {
@@ -1704,7 +1704,7 @@ var DocumentExecutor = class {
    */
   getPreviousResults(document, beforeNodeId) {
     const results = /* @__PURE__ */ new Map();
-    const executableNodes = this.findExecutableNodes(document.nodes || document.blocks);
+    const executableNodes = this.findExecutableNodes(document.nodes);
     for (const node of executableNodes) {
       if (node.id === beforeNodeId) {
         break;
@@ -1732,22 +1732,22 @@ var DocumentExecutor = class {
   }
 };
 
-// document/tool-registry.ts
+// document/function-registry.ts
 import { z as z2 } from "zod";
-function createToolRegistry(tools) {
-  return tools;
+function createFunctionRegistry(functions) {
+  return functions;
 }
-function defineTool(definition) {
+function defineFunction(definition) {
   return definition;
 }
-function mergeToolRegistries(...registries) {
+function mergeFunctionRegistries(...registries) {
   return registries.reduce((merged, registry) => {
     return { ...merged, ...registry };
   }, {});
 }
-function createSimpleRegistry(tools) {
+function createSimpleRegistry(functions) {
   const registry = {};
-  for (const [name, fn] of Object.entries(tools)) {
+  for (const [name, fn] of Object.entries(functions)) {
     registry[name] = {
       schema: z2.any(),
       // Accept any params
@@ -1757,9 +1757,9 @@ function createSimpleRegistry(tools) {
   return registry;
 }
 
-// document/tool-naming.ts
-function toAzureFunctionName(idyllToolName) {
-  return idyllToolName.replace(":", "--");
+// document/function-naming.ts
+function toAzureFunctionName(idyllFunctionName) {
+  return idyllFunctionName.replace(":", "--");
 }
 function fromAzureFunctionName(azureFunctionName) {
   if (azureFunctionName.includes("--")) {
@@ -1767,27 +1767,27 @@ function fromAzureFunctionName(azureFunctionName) {
   }
   return azureFunctionName;
 }
-function validateToolName(toolName) {
+function validateFunctionName(functionName) {
   const pattern = /^([a-zA-Z_$][a-zA-Z0-9_$]*:)?[a-zA-Z_$][a-zA-Z0-9_$]*$/;
-  if (!pattern.test(toolName)) {
+  if (!pattern.test(functionName)) {
     return {
       valid: false,
-      error: 'Tool name must be valid JS identifiers in format "module:function" or "function"'
+      error: 'Function name must be valid JS identifiers in format "module:function" or "function"'
     };
   }
   return { valid: true };
 }
-function parseToolName(toolName) {
-  const colonIndex = toolName.indexOf(":");
+function parseFunctionName(functionName) {
+  const colonIndex = functionName.indexOf(":");
   if (colonIndex === -1) {
-    return { function: toolName };
+    return { function: functionName };
   }
   return {
-    module: toolName.substring(0, colonIndex),
-    function: toolName.substring(colonIndex + 1)
+    module: functionName.substring(0, colonIndex),
+    function: functionName.substring(colonIndex + 1)
   };
 }
-function buildToolName(module, functionName) {
+function buildFunctionName(module, functionName) {
   return module ? `${module}:${functionName}` : functionName;
 }
 
@@ -1855,11 +1855,11 @@ function validateNode(node, nodeIds, errors, warnings) {
     return;
   }
   if (isExecutableNode(node)) {
-    if (!node.tool) {
+    if (!node.fn) {
       errors.push({
         type: "error",
-        code: "MISSING_TOOL",
-        message: "Executable node must specify a tool",
+        code: "MISSING_FUNCTION",
+        message: "Executable node must specify a function",
         nodeId
       });
     }
@@ -1899,14 +1899,14 @@ async function validateReferences(document, context, errors, warnings) {
       }
     }
   }
-  if (context.validateTool) {
+  if (context.validateFunction) {
     for (const node of traverseNodes(document.nodes)) {
-      if (isExecutableNode(node) && node.tool) {
-        if (!context.validateTool(node.tool)) {
+      if (isExecutableNode(node) && node.fn) {
+        if (!context.validateFunction(node.fn)) {
           errors.push({
             type: "error",
-            code: "INVALID_TOOL",
-            message: `Tool not found: ${node.tool}`,
+            code: "INVALID_FUNCTION",
+            message: `Function not found: ${node.fn}`,
             nodeId: node.id || "unknown"
           });
         }
@@ -2093,14 +2093,14 @@ function interpolateContent(content, resolvedVariables) {
   return result;
 }
 
-// document/custom-tool-executor.ts
-async function executeCustomTool(toolNode, options) {
+// document/custom-function-executor.ts
+async function executeCustomFunction(functionNode, options) {
   const startTime = Date.now();
-  if (toolNode.type !== "tool") {
-    throw new Error("Node is not a tool");
+  if (functionNode.type !== "function") {
+    throw new Error("Node is not a function");
   }
-  const toolName = toolNode.props?.title || "Unnamed Tool";
-  const definitionNodes = toolNode.children || [];
+  const functionName = functionNode.props?.title || "Unnamed Function";
+  const definitionNodes = functionNode.children || [];
   const redeclarationErrors = checkVariableRedeclaration(definitionNodes);
   if (redeclarationErrors.length > 0) {
     throw new Error(
@@ -2125,7 +2125,7 @@ async function executeCustomTool(toolNode, options) {
     resolutionResult.variables
   );
   const executionDocument = {
-    id: `tool-exec-${Date.now()}`,
+    id: `function-exec-${Date.now()}`,
     nodes: interpolatedNodes
   };
   const executor = new DocumentExecutor(options);
@@ -2138,13 +2138,13 @@ async function executeCustomTool(toolNode, options) {
     variables: resolutionResult.variables,
     nodes: report.nodes,
     metadata: {
-      toolName,
+      functionName,
       duration: Date.now() - startTime,
       nodesExecuted: report.metadata.nodesExecuted,
       nodesSucceeded: report.metadata.nodesSucceeded,
       nodesFailed: report.metadata.nodesFailed
     },
-    toolDefinition: toolNode
+    functionDefinition: functionNode
   };
   return executionContext;
 }
@@ -2182,12 +2182,12 @@ function extractRelevantResult(context, extractionHint) {
   return {
     success: false,
     errors,
-    toolName: context.metadata.toolName
+    functionName: context.metadata.functionName
   };
 }
-function parseCustomTool(document) {
+function parseCustomFunction(document) {
   for (const node of document.nodes) {
-    if ("type" in node && node.type === "tool") {
+    if ("type" in node && node.type === "function") {
       return node;
     }
   }
@@ -2539,8 +2539,8 @@ var ActivityMemory = class {
       if (activity.assistantMessage) {
         parts.push(`Assistant: "${activity.assistantMessage.substring(0, 100)}${activity.assistantMessage.length > 100 ? "..." : ""}"`);
       }
-      if (activity.toolCalls && activity.toolCalls.length > 0) {
-        parts.push(`Tools: ${activity.toolCalls.map((tc) => tc.name).join(", ")}`);
+      if (activity.functionCalls && activity.functionCalls.length > 0) {
+        parts.push(`Functions: ${activity.functionCalls.map((tc) => tc.name).join(", ")}`);
       }
       if (activity.error) {
         parts.push(`Error: ${activity.error}`);
@@ -2580,9 +2580,9 @@ ${availableTools.map((t) => `- ${t}`).join("\n")}`);
   const customTools = [];
   const triggers = [];
   for (const node of agent.nodes) {
-    if (node.type === "tool") {
-      const title = node.props?.title || "Untitled Tool";
-      customTools.push(`Custom tool: ${title}`);
+    if (node.type === "function") {
+      const title = node.props?.title || "Untitled Function";
+      customTools.push(`Custom function: ${title}`);
     } else if (node.type === "trigger") {
       const trigger = node.props?.trigger;
       if (trigger) {
@@ -2597,7 +2597,7 @@ ${availableTools.map((t) => `- ${t}`).join("\n")}`);
   }
   if (customTools.length > 0) {
     sections.push(`
-Custom tools defined:
+Custom functions defined:
 ${customTools.join("\n")}`);
   }
   if (triggers.length > 0) {
@@ -2639,53 +2639,53 @@ ${includeMemory}`;
 Documents are structured using XML with blocks like:
 - <p> for paragraphs
 - <h1>, <h2>, etc. for headings
-- <fncall idyll-tool="..."> for tool execution
+- <fncall idyll-fn="..."> for function execution
 - <variable name="..." /> for variables
 - <mention:type id="...">label</mention:type> for references
 </document_format>
 
 <response_guidelines>
 When responding to user queries:
-1. If you need to call tools, call them first
-2. After tool calls complete, provide ONE clear, comprehensive response
+1. If you need to call functions, call them first
+2. After function calls complete, provide ONE clear, comprehensive response
 3. Do not repeat or rephrase the same information multiple times
-4. Only continue with additional steps if you need to call different tools or perform distinct reasoning
+4. Only continue with additional steps if you need to call different functions or perform distinct reasoning
 5. Avoid generating multiple similar responses about the same topic
 </response_guidelines>`;
   return prompt;
 }
 
-// agent/custom-tools.ts
+// agent/custom-functions.ts
 import { z as z3 } from "zod";
-function extractCustomTools(agentDoc, baseTools, getAgentContext) {
-  const customTools = {};
-  console.log("\u{1F50D} Extracting custom tools from agent document...");
+function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext) {
+  const customFunctions = {};
+  console.log("\u{1F50D} Extracting custom functions from agent document...");
   for (const block of agentDoc.nodes) {
-    if (block.type === "tool" && "props" in block) {
-      console.log("\u{1F4E6} Found tool block:", JSON.stringify(block, null, 2));
-      const title = block.props?.title || "Untitled Tool";
+    if (block.type === "function" && "props" in block) {
+      console.log("\u{1F4E6} Found function block:", JSON.stringify(block, null, 2));
+      const title = block.props?.title || "Untitled Function";
       const icon = block.props?.icon;
       const description = extractTextContent2(block);
-      const definitionBlocks = extractToolDefinitionBlocks(block);
+      const definitionBlocks = extractFunctionDefinitionBlocks(block);
       if (definitionBlocks.length === 0) {
-        console.warn(`Tool "${title}" has no definition blocks`);
+        console.warn(`Function "${title}" has no definition blocks`);
         continue;
       }
-      const toolName = title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-      customTools[`custom:${toolName}`] = {
-        description: description || `Custom tool: ${title}`,
+      const functionName = title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+      customFunctions[`custom:${functionName}`] = {
+        description: description || `Custom function: ${title}`,
         schema: z3.object({
-          context: z3.string().describe("Relevant context to help resolve any variables in the tool").optional()
+          context: z3.string().describe("Relevant context to help resolve any variables in the function").optional()
         }),
         execute: async (params, content, context) => {
-          console.log(`\u{1F6E0}\uFE0F Executing custom tool: ${title}`);
-          const toolDoc = {
-            id: `custom-tool-${toolName}`,
+          console.log(`\u{1F6E0}\uFE0F Executing custom function: ${title}`);
+          const functionDoc = {
+            id: `custom-function-${functionName}`,
             nodes: definitionBlocks
           };
-          const customToolBlock = {
-            id: context.currentNodeId || "custom-tool-exec",
-            type: "tool",
+          const customFunctionBlock = {
+            id: context.currentNodeId || "custom-function-exec",
+            type: "function",
             content: [],
             children: definitionBlocks,
             props: { title, icon }
@@ -2698,15 +2698,15 @@ function extractCustomTools(agentDoc, baseTools, getAgentContext) {
           } else if (getAgentContext) {
             agentContext = getAgentContext();
           } else {
-            agentContext = `Tool invoked: ${title}`;
+            agentContext = `Function invoked: ${title}`;
           }
           console.log(`\u{1F4DD} Agent context for variable resolution: "${agentContext}"`);
           console.log(`\u{1F4E6} Params:`, params);
           console.log(`\u{1F4C4} Content:`, content);
           console.log(`\u{1F50D} GetAgentContext available:`, !!getAgentContext);
           try {
-            const executionContext = await executeCustomTool(customToolBlock, {
-              tools: baseTools,
+            const executionContext = await executeCustomFunction(customFunctionBlock, {
+              functions: baseFunctions,
               agentContext
             });
             const lastNodeId = Array.from(executionContext.nodes.keys()).pop();
@@ -2719,23 +2719,23 @@ function extractCustomTools(agentDoc, baseTools, getAgentContext) {
             const failedResults = results.filter((r) => !r.success);
             console.log(`\u{1F4CA} Execution summary: ${successfulResults.length} successful, ${failedResults.length} failed`);
             if (successfulResults.length > 0) {
-              console.log(`\u{1F4E6} Returning full ToolExecutionReport for compression`);
+              console.log(`\u{1F4E6} Returning full FunctionExecutionReport for compression`);
               return executionContext;
             }
             if (lastResult && !lastResult.success) {
-              const errorMsg = typeof lastResult.error === "string" ? lastResult.error : JSON.stringify(lastResult.error) || "Tool execution failed";
+              const errorMsg = typeof lastResult.error === "string" ? lastResult.error : JSON.stringify(lastResult.error) || "Function execution failed";
               throw new Error(errorMsg);
             }
             return executionContext;
           } catch (error) {
-            console.error(`\u274C Custom tool "${title}" failed:`, error);
+            console.error(`\u274C Custom function "${title}" failed:`, error);
             throw error;
           }
         }
       };
     }
   }
-  return customTools;
+  return customFunctions;
 }
 function extractTextContent2(block) {
   if (!("content" in block) || !block.content) {
@@ -2749,17 +2749,17 @@ function extractTextContent2(block) {
   }
   return texts.join("").trim();
 }
-function extractToolDefinitionBlocks(toolBlock) {
-  if (!("children" in toolBlock) || !toolBlock.children) {
+function extractFunctionDefinitionBlocks(functionBlock) {
+  if (!("children" in functionBlock) || !functionBlock.children) {
     return [];
   }
   const definitionBlocks = [];
-  for (const child of toolBlock.children) {
+  for (const child of functionBlock.children) {
     if ("type" in child) {
       if (child.type === "paragraph" || child.type === "function_call") {
         definitionBlocks.push(child);
       } else if ("children" in child && child.children) {
-        definitionBlocks.push(...extractToolDefinitionBlocks(child));
+        definitionBlocks.push(...extractFunctionDefinitionBlocks(child));
       }
     }
   }
@@ -2776,7 +2776,7 @@ var ResponsePipeline = class {
     this.middleware.push(middleware);
   }
   /**
-   * Process a tool result through all middleware in order
+   * Process a function result through all middleware in order
    */
   async process(context) {
     let result = context.result;
@@ -2808,7 +2808,7 @@ var ResponsePipeline = class {
 var Agent = class {
   program;
   model;
-  tools;
+  functions;
   memory;
   context;
   aiTools = {};
@@ -2817,7 +2817,7 @@ var Agent = class {
   constructor(config) {
     this.program = config.program;
     this.model = config.model;
-    this.tools = config.tools;
+    this.functions = config.functions;
     this.memory = new ActivityMemory();
     this.context = {
       agentId: this.program.id,
@@ -2830,21 +2830,21 @@ var Agent = class {
     this.initializeTools();
   }
   /**
-   * Initialize tools for AI SDK
+   * Initialize tools for AI SDK (converts functions to AI tools)
    */
   initializeTools() {
-    const customTools = extractCustomTools(this.program, this.tools, () => {
+    const customTools = extractCustomFunctions(this.program, this.functions, () => {
       const lastUserMessage = this.currentMessages.filter((m) => m.role === "user").pop();
       return typeof lastUserMessage?.content === "string" ? lastUserMessage.content : JSON.stringify(lastUserMessage?.content || "");
     });
-    const allTools = mergeToolRegistries(this.tools, customTools);
+    const allTools = mergeFunctionRegistries(this.functions, customTools);
     for (const [name, tool] of Object.entries(allTools)) {
       const aiToolName = toAzureFunctionName(name);
       this.aiTools[aiToolName] = {
         description: tool.description,
         parameters: tool.schema,
         execute: async (params) => {
-          console.log(`\u{1F527} Executing tool: ${name}`);
+          console.log(`\u{1F527} Executing function: ${name}`);
           const context = {
             currentNodeId: uuidv43(),
             previousResults: /* @__PURE__ */ new Map(),
@@ -2855,18 +2855,18 @@ var Agent = class {
             delete params.content;
             const result = await tool.execute(params, content, context);
             const finalResult = await this.responsePipeline.process({
-              toolName: name,
+              functionName: name,
               params,
               result,
               messages: this.currentMessages.slice(-3)
             });
-            const isCustomTool = name.startsWith("custom:");
-            if (isCustomTool) {
-              console.log(`\u{1F3AF} Custom tool ${name} executed and compressed`);
+            const isCustomFunction = name.startsWith("custom:");
+            if (isCustomFunction) {
+              console.log(`\u{1F3AF} Custom function ${name} executed and compressed`);
             }
             this.memory.add({
               type: "tool",
-              toolCalls: [
+              functionCalls: [
                 {
                   name,
                   args: params,
@@ -2879,7 +2879,7 @@ var Agent = class {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             this.memory.add({
               type: "tool",
-              toolCalls: [
+              functionCalls: [
                 {
                   name,
                   args: params
@@ -2898,10 +2898,10 @@ var Agent = class {
    */
   getSystemPrompt() {
     const memoryContext = this.memory.formatForPrompt();
-    const toolNames = Object.keys(this.aiTools);
+    const functionNames = Object.keys(this.aiTools);
     const systemPrompt = buildDetailedSystemPrompt(
       this.program,
-      toolNames,
+      functionNames,
       memoryContext
     );
     console.log(
@@ -2935,7 +2935,7 @@ var Agent = class {
       activity.assistantMessage = result.text;
       activity.usage = result.usage;
       if (result.toolCalls && result.toolCalls.length > 0) {
-        activity.toolCalls = result.toolCalls.map((tc) => ({
+        activity.functionCalls = result.toolCalls.map((tc) => ({
           name: tc.toolName,
           args: tc.args
         }));
@@ -2975,15 +2975,16 @@ var Agent = class {
         system: this.getSystemPrompt(),
         messages,
         tools: this.aiTools,
+        toolChoice: "auto",
         maxSteps: options?.maxSteps ?? 10,
         temperature: options?.temperature ?? 0.7,
         onFinish: async ({ text, toolCalls, usage, finishReason }) => {
           console.log(
-            `[Agent] \u{1F3AF} Final finish - reason: ${finishReason}, text length: ${text.length}, toolCalls: ${toolCalls?.length || 0}`
+            `[Agent] \u{1F3AF} Final finish - reason: ${finishReason}, text length: ${text.length}, functionCalls: ${toolCalls?.length || 0}`
           );
           activity.assistantMessage = text;
           if (toolCalls && toolCalls.length > 0) {
-            activity.toolCalls = toolCalls.map((tc) => ({
+            activity.functionCalls = toolCalls.map((tc) => ({
               name: fromAzureFunctionName(tc.toolName),
               args: tc.args
             }));
@@ -2991,9 +2992,9 @@ var Agent = class {
           if (options?.onFinish) {
             await options.onFinish({
               text,
-              toolCalls: toolCalls?.map((tc) => ({
+              functionCalls: toolCalls?.map((tc) => ({
                 ...tc,
-                toolName: fromAzureFunctionName(tc.toolName)
+                functionName: fromAzureFunctionName(tc.toolName)
               })),
               usage,
               finishReason
@@ -3043,13 +3044,13 @@ export {
   applyDiff,
   applyResolvedVariables,
   buildDetailedSystemPrompt,
+  buildFunctionName,
   buildSystemPrompt,
-  buildToolName,
   checkVariableRedeclaration,
+  createFunctionRegistry,
   createSimpleRegistry,
-  createToolRegistry,
-  defineTool,
-  executeCustomTool,
+  defineFunction,
+  executeCustomFunction,
   extractMentions,
   extractRelevantResult,
   extractVariableDefinitions,
@@ -3064,15 +3065,15 @@ export {
   isMention,
   isTextContent,
   isVariable,
-  mergeToolRegistries,
-  parseCustomTool,
-  parseToolName,
+  mergeFunctionRegistries,
+  parseCustomFunction,
+  parseFunctionName,
   parseXmlToAst,
   resolveVariables,
   serializeAstToXml,
   toAzureFunctionName,
   traverseNodes,
   validateDocument,
-  validateToolName
+  validateFunctionName
 };
 //# sourceMappingURL=index.js.map

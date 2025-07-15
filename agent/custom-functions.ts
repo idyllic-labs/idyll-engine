@@ -1,73 +1,73 @@
 /**
- * Custom tool extraction and execution for agents
+ * Custom function extraction for agents
  * 
- * Extracts tool definitions from agent system prompts and
- * creates executable tools that use the custom tool executor.
+ * Extracts custom function definitions from agent documents
+ * and converts them into tools that agents can call.
  */
 
 import { z } from 'zod';
 import { AgentDocument, Node, ContentNode } from '../document/ast';
-import { ToolDefinition, ToolRegistry } from '../document/tool-registry';
-import { executeCustomTool, parseCustomTool } from '../document/custom-tool-executor';
+import { FunctionDefinition, FunctionRegistry } from '../document/function-registry';
+import { executeCustomFunction, parseCustomFunction } from '../document/custom-function-executor';
 import { parseXmlToAst } from '../document/parser-grammar';
 
 /**
- * Extract custom tools from agent document
+ * Extract custom functions from agent document and convert them to tools
  */
-export function extractCustomTools(
+export function extractCustomFunctions(
   agentDoc: AgentDocument,
-  baseTools: ToolRegistry,
+  baseFunctions: FunctionRegistry,
   getAgentContext?: () => string
-): ToolRegistry {
-  const customTools: ToolRegistry = {};
+): FunctionRegistry {
+  const customFunctions: FunctionRegistry = {};
   
-  console.log('🔍 Extracting custom tools from agent document...');
+  console.log('🔍 Extracting custom functions from agent document...');
   
-  // Find all tool blocks
+  // Find all function blocks
   for (const block of agentDoc.nodes) {
-    if (block.type === 'tool' && 'props' in block) {
-      console.log('📦 Found tool block:', JSON.stringify(block, null, 2));
-      const title = block.props?.title as string || 'Untitled Tool';
+    if (block.type === 'function' && 'props' in block) {
+      console.log('📦 Found function block:', JSON.stringify(block, null, 2));
+      const title = block.props?.title as string || 'Untitled Function';
       const icon = block.props?.icon as string;
       
       // Extract description from content
       const description = extractTextContent(block);
       
-      // Extract tool definition blocks from children
-      const definitionBlocks = extractToolDefinitionBlocks(block);
+      // Extract function definition blocks from children
+      const definitionBlocks = extractFunctionDefinitionBlocks(block);
       
       if (definitionBlocks.length === 0) {
-        console.warn(`Tool "${title}" has no definition blocks`);
+        console.warn(`Function "${title}" has no definition blocks`);
         continue;
       }
       
-      // Convert title to valid tool name (snake_case)
-      const toolName = title
+      // Convert title to valid function name (snake_case)
+      const functionName = title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '');
       
-      // Create the custom tool
-      customTools[`custom:${toolName}`] = {
-        description: description || `Custom tool: ${title}`,
+      // Create the tool from this custom function
+      customFunctions[`custom:${functionName}`] = {
+        description: description || `Custom function: ${title}`,
         schema: z.object({
           context: z.string()
-            .describe('Relevant context to help resolve any variables in the tool')
+            .describe('Relevant context to help resolve any variables in the function')
             .optional(),
         }),
         execute: async (params, content, context) => {
-          console.log(`🛠️ Executing custom tool: ${title}`);
+          console.log(`🛠️ Executing custom function: ${title}`);
           
-          // Create a virtual document with the tool definition
-          const toolDoc = {
-            id: `custom-tool-${toolName}`,
+          // Create a virtual document with the function definition
+          const functionDoc = {
+            id: `custom-function-${functionName}`,
             nodes: definitionBlocks,
           };
           
-          // Create custom tool block for execution
-          const customToolBlock: ContentNode = {
-            id: context.currentNodeId || 'custom-tool-exec',
-            type: 'tool',
+          // Create custom function block for execution
+          const customFunctionBlock: ContentNode = {
+            id: context.currentNodeId || 'custom-function-exec',
+            type: 'function',
             content: [],
             children: definitionBlocks,
             props: { title, icon },
@@ -85,7 +85,7 @@ export function extractCustomTools(
             agentContext = getAgentContext();
           } else {
             // Try to infer from the execution context
-            agentContext = `Tool invoked: ${title}`;
+            agentContext = `Function invoked: ${title}`;
           }
           
           console.log(`📝 Agent context for variable resolution: "${agentContext}"`);
@@ -94,9 +94,9 @@ export function extractCustomTools(
           console.log(`🔍 GetAgentContext available:`, !!getAgentContext);
           
           try {
-            // Execute the custom tool
-            const executionContext = await executeCustomTool(customToolBlock, {
-              tools: baseTools,
+            // Execute the custom function
+            const executionContext = await executeCustomFunction(customFunctionBlock, {
+              functions: baseFunctions,
               agentContext: agentContext,
             });
             
@@ -117,7 +117,7 @@ export function extractCustomTools(
             
             // If we have successful results, return the full context for compression
             if (successfulResults.length > 0) {
-              console.log(`📦 Returning full ToolExecutionReport for compression`);
+              console.log(`📦 Returning full FunctionExecutionReport for compression`);
               return executionContext;
             }
             
@@ -125,14 +125,14 @@ export function extractCustomTools(
             if (lastResult && !lastResult.success) {
               const errorMsg = typeof lastResult.error === 'string' 
                 ? lastResult.error 
-                : JSON.stringify(lastResult.error) || 'Tool execution failed';
+                : JSON.stringify(lastResult.error) || 'Function execution failed';
               throw new Error(errorMsg);
             }
             
             // Fallback
             return executionContext;
           } catch (error) {
-            console.error(`❌ Custom tool "${title}" failed:`, error);
+            console.error(`❌ Custom function "${title}" failed:`, error);
             throw error;
           }
         },
@@ -140,7 +140,7 @@ export function extractCustomTools(
     }
   }
   
-  return customTools;
+  return customFunctions;
 }
 
 /**
@@ -162,34 +162,34 @@ function extractTextContent(block: Node): string {
 }
 
 /**
- * Extract tool definition blocks from a tool block
+ * Extract function definition blocks from a function block
  * 
- * Tool blocks have a structure like:
- * <tool>
- *   <tool:description>text content</tool:description>
- *   <tool:definition>
+ * Function blocks have a structure like:
+ * <function>
+ *   <function:description>text content</function:description>
+ *   <function:definition>
  *     <p>...</p>
  *     <fncall>...</fncall>
- *   </tool:definition>
- * </tool>
+ *   </function:definition>
+ * </function>
  */
-function extractToolDefinitionBlocks(toolBlock: Node): Node[] {
-  if (!('children' in toolBlock) || !toolBlock.children) {
+function extractFunctionDefinitionBlocks(functionBlock: Node): Node[] {
+  if (!('children' in functionBlock) || !functionBlock.children) {
     return [];
   }
   
   const definitionBlocks: Node[] = [];
   
-  for (const child of toolBlock.children) {
+  for (const child of functionBlock.children) {
     // Look for blocks with specific types from our parser
     if ('type' in child) {
-      // The parser converts <tool:definition> to a block with type 'tool:definition'
+      // The parser converts <function:definition> to a block with type 'function:definition'
       // But we need to check the actual parsed structure
       if (child.type === 'paragraph' || child.type === 'function_call') {
         definitionBlocks.push(child);
       } else if ('children' in child && child.children) {
         // Recursively extract from nested structures
-        definitionBlocks.push(...extractToolDefinitionBlocks(child));
+        definitionBlocks.push(...extractFunctionDefinitionBlocks(child));
       }
     }
   }
