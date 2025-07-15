@@ -1,6 +1,6 @@
 {
   "name": "@idyllic-labs/idyll-engine",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Document execution engine for Idyllic language experimentation",
   "type": "module",
   "main": "./dist/index.js",

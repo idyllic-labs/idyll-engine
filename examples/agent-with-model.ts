@@ -6,7 +6,7 @@
  * with an external AI model provider (e.g., from Vercel AI SDK).
  */
 
-import { Agent, createFunctionRegistry, defineFunction, parseXmlToAst, AgentDefinition } from '@idyllic-labs/idyll-engine';
+import { Agent, createFunctionRegistry, defineFunction, parseXmlToAst, AgentDefinition } from '../index';
 import { createAzure } from '@ai-sdk/azure';
 // import { openai } from '@ai-sdk/openai'; // Uncomment if using OpenAI instead
 import { Message } from 'ai';
@@ -54,7 +54,7 @@ const functions = createFunctionRegistry({
 });
 
 // Parse the agent program from XML
-const program = parseXML(`
+const program = parseXmlToAst(`
   <agent id="demo-agent" name="Demo Assistant">
     <p>You are a helpful assistant with access to greeting and calculation functions.</p>
   </agent>
@@ -83,14 +83,11 @@ async function main() {
   console.log('Assistant:', result.message.content);
   
   // Stream chat
-  const stream = await agent.chatStream(messages, {
-    onChunk: (chunk) => process.stdout.write(chunk),
-    onToolCall: (tool, args) => console.log(`\nCalling ${tool} with`, args),
-  });
+  const stream = await agent.chatStream(messages);
   
   // Use the stream
   for await (const chunk of stream.textStream) {
-    // Already printed via onChunk
+    process.stdout.write(chunk);
   }
 }
 

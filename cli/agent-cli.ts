@@ -138,7 +138,7 @@ const commands = {
       currentAgent = new Agent({
         program: agentDoc,
         model,
-        tools: createDemoTools(),
+        functions: createDemoTools(),
       });
 
       currentAgentPath = agentPath;

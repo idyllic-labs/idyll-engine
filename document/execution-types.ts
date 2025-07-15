@@ -105,13 +105,26 @@ export interface FunctionExecutionReport {
 }
 
 // ============================================
+// Execution Hooks
+// ============================================
+
+/**
+ * Hooks for function execution instrumentation
+ */
+export interface ExecutionHooks {
+  beforeExecution?: (functionName: string, params: any, context: NodeExecutionContext) => Promise<void> | void;
+  afterExecution?: (functionName: string, result: unknown, duration: number) => Promise<void> | void;
+  onError?: (functionName: string, error: unknown, duration: number) => Promise<void> | void;
+}
+
+// ============================================
 // Function Definitions
 // ============================================
 
 /**
- * Function executor function signature
+ * Function implementation signature
  */
-export type FunctionExecutor<TParams = any, TApi = any> = (
+export type FunctionImpl<TParams = any, TApi = any> = (
   params: TParams,
   content: string,
   context: NodeExecutionContext & { api?: TApi }
@@ -125,7 +138,7 @@ export interface FunctionDefinition<TParams = any, TApi = any> {
   schema: z.ZodSchema<TParams>;
   
   /** Function that executes the function */
-  execute: FunctionExecutor<TParams, TApi>;
+  execute: FunctionImpl<TParams, TApi>;
   
   /** Optional description for documentation */
   description?: string;
@@ -159,6 +172,9 @@ export interface ExecutionOptions<TApi = any> {
   
   /** Optional callback for execution progress */
   onProgress?: (nodeId: string, index: number, total: number) => void;
+  
+  /** Optional execution hooks for instrumentation */
+  hooks?: ExecutionHooks;
 }
 
 // ============================================

@@ -196,19 +196,19 @@ async function main() {
   
   console.log("\n📊 Metadata:");
   console.log(`   Function: ${executionContext.metadata.functionName}`);
-  console.log(`   Blocks executed: ${executionContext.metadata.blocksExecuted}`);
-  console.log(`   Successful: ${executionContext.metadata.blocksSucceeded}`);
-  console.log(`   Failed: ${executionContext.metadata.blocksFailed}`);
+  console.log(`   Nodes executed: ${executionContext.metadata.nodesExecuted}`);
+  console.log(`   Successful: ${executionContext.metadata.nodesSucceeded}`);
+  console.log(`   Failed: ${executionContext.metadata.nodesFailed}`);
   
   console.log("\n🔤 Resolved Variables:");
   executionContext.variables.forEach((value, name) => {
     console.log(`   ${name} = "${value}"`);
   });
   
-  console.log("\n📦 Block Results:");
+  console.log("\n📦 Node Results:");
   let stepNum = 1;
-  for (const [blockId, result] of executionContext.blocks) {
-    console.log(`\n   Step ${stepNum}: ${blockId.slice(0, 8)}...`);
+  for (const [nodeId, result] of executionContext.nodes) {
+    console.log(`\n   Step ${stepNum}: ${nodeId.slice(0, 8)}...`);
     console.log(`   Success: ${result.success ? "✅" : "❌"}`);
     if (result.success) {
       console.log(`   Result:`, JSON.stringify(result.data, null, 2).split('\n').join('\n   '));
@@ -223,7 +223,7 @@ async function main() {
   
   // In subprocess model, this extraction would happen in isolation
   // and only the relevant part would return to main agent
-  const lastResult = Array.from(executionContext.blocks.values()).pop();
+  const lastResult = Array.from(executionContext.nodes.values()).pop();
   if (lastResult?.success) {
     const data = lastResult.data as any;
     if (data?.formatted) {

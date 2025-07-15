@@ -22,7 +22,8 @@
       "Bash(git push:*)",
       "Bash(find:*)",
       "Bash(git mv:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }

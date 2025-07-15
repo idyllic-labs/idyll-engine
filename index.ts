@@ -12,6 +12,7 @@ export { parseXmlToAst, serializeAstToXml } from './document/parser-grammar';
 
 // Document execution
 export { DocumentExecutor } from './document/executor';
+export { AbstractFunctionExecutor } from './document/abstract-function-executor';
 export * from './document/execution-types';
 export { 
   createFunctionRegistry, 
@@ -38,7 +39,7 @@ export {
   type ExecutionContext,
   type FunctionResult,
   type FunctionResolver,
-  type FunctionExecutor,
+  type FunctionImpl,
   type FunctionDefinition as CoreFunctionDefinition,
 } from './types';
 
@@ -49,7 +50,7 @@ export { GrammarCompiler } from './document/grammar-compiler';
 // Variable resolution system
 export * from './document/variable-resolution';
 
-// Custom function execution
+// Agent custom function execution
 export * from './document/custom-function-executor';
 
 // Diff system

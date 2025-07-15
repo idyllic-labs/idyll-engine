@@ -1,8 +1,8 @@
 /**
- * Custom Function Executor for Idyllic Engine
+ * Agent Custom Function Executor for Idyllic Engine
  * 
- * Executes custom functions defined with <function> blocks, handling
- * variable resolution and multi-step execution
+ * Executes custom functions defined with <function> blocks in agent context,
+ * handling variable resolution and multi-step execution
  */
 
 import type { 
@@ -15,8 +15,10 @@ import { isExecutableNode, getExecutableNodes } from './ast';
 import type { 
   FunctionExecutionReport, 
   ExecutionOptions,
-  NodeExecutionResult
+  NodeExecutionResult,
+  ExecutionHooks
 } from './execution-types';
+import { AbstractFunctionExecutor } from './abstract-function-executor';
 import { DocumentExecutor } from './executor';
 import {
   extractVariableDefinitions,
@@ -28,9 +30,9 @@ import {
 } from './variable-resolution';
 
 /**
- * Options for custom function execution
+ * Options for agent custom function execution
  */
-export interface CustomFunctionExecutionOptions<TApi = any> extends ExecutionOptions<TApi> {
+export interface AgentCustomFunctionExecutionOptions<TApi = any> extends ExecutionOptions<TApi> {
   /** Agent context provided when invoking the function */
   agentContext: string;
   
@@ -39,11 +41,27 @@ export interface CustomFunctionExecutionOptions<TApi = any> extends ExecutionOpt
 }
 
 /**
+ * Agent Custom Function Executor class
+ */
+export class AgentCustomFunctionExecutor<TApi = any> extends AbstractFunctionExecutor {
+  private options: AgentCustomFunctionExecutionOptions<TApi>;
+  
+  constructor(options: AgentCustomFunctionExecutionOptions<TApi>) {
+    super(options.hooks);
+    this.options = options;
+  }
+  
+  async execute(functionNode: ContentNode): Promise<FunctionExecutionReport> {
+    return executeCustomFunction(functionNode, this.options);
+  }
+}
+
+/**
  * Execute a custom function defined as a ContentNode
  */
 export async function executeCustomFunction<TApi = any>(
   functionNode: ContentNode,
-  options: CustomFunctionExecutionOptions<TApi>
+  options: AgentCustomFunctionExecutionOptions<TApi>
 ): Promise<FunctionExecutionReport> {
   const startTime = Date.now();
   
@@ -98,7 +116,7 @@ export async function executeCustomFunction<TApi = any>(
     nodes: interpolatedNodes,
   };
   
-  // Execute using DocumentExecutor
+  // Execute using DocumentExecutor (with shared hooks)
   const executor = new DocumentExecutor(options);
   const report = await executor.execute({
     mode: 'document',

@@ -21,12 +21,15 @@ import type {
   NodeExecutionError,
   ExecutionMetadata,
   ExecutionRequest,
+  ExecutionHooks,
 } from './execution-types';
+import { AbstractFunctionExecutor } from './abstract-function-executor';
 
-export class DocumentExecutor<TApi = any> {
+export class DocumentExecutor<TApi = any> extends AbstractFunctionExecutor {
   private options: ExecutionOptions<TApi>;
   
   constructor(options: ExecutionOptions<TApi>) {
+    super(options.hooks);
     this.options = {
       stopOnError: false,
       timeout: 30000,
@@ -71,8 +74,49 @@ export class DocumentExecutor<TApi = any> {
         api: this.options.api,
       };
       
-      // Execute the node
-      const result = await this.executeNode(node, context);
+      // Execute the node using shared execution logic
+      const func = this.options.functions[node.fn];
+      if (!func) {
+        const errorResult: NodeExecutionResult = {
+          success: false,
+          error: {
+            message: `Function not found: ${node.fn}`,
+            code: 'FUNCTION_NOT_FOUND',
+            details: { functionName: node.fn }
+          },
+          duration: 0,
+          timestamp: new Date(),
+        };
+        state.set(node.id, errorResult);
+        continue;
+      }
+      
+      // Validate parameters
+      let validatedParams: any;
+      try {
+        validatedParams = func.schema.parse(node.parameters);
+      } catch (error) {
+        const errorResult: NodeExecutionResult = {
+          success: false,
+          error: {
+            message: error instanceof z.ZodError 
+              ? `Invalid parameters: ${error.errors.map(e => e.message).join(', ')}`
+              : 'Parameter validation failed',
+            code: 'INVALID_PARAMETERS',
+            details: error
+          },
+          duration: 0,
+          timestamp: new Date(),
+        };
+        state.set(node.id, errorResult);
+        continue;
+      }
+      
+      // Extract content as string
+      const content = this.extractContent(node.content);
+      
+      // Execute using shared logic with hooks
+      const result = await this.executeFunction(node.fn, func, validatedParams, content, context);
       state.set(node.id, result);
       
       // Stop on error if requested
@@ -126,8 +170,29 @@ export class DocumentExecutor<TApi = any> {
       api: this.options.api,
     };
     
-    // Execute the node
-    const result = await this.executeNode(node as ExecutableNode, context);
+    // Execute the node using shared execution logic
+    const executableNode = node as ExecutableNode;
+    const func = this.options.functions[executableNode.fn];
+    if (!func) {
+      throw new Error(`Function not found: ${executableNode.fn}`);
+    }
+    
+    // Validate parameters
+    let validatedParams: any;
+    try {
+      validatedParams = func.schema.parse(executableNode.parameters);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new Error(`Invalid parameters: ${error.errors.map(e => e.message).join(', ')}`);
+      }
+      throw error;
+    }
+    
+    // Extract content as string
+    const content = this.extractContent(executableNode.content);
+    
+    // Execute using shared logic with hooks
+    const result = await this.executeFunction(executableNode.fn, func, validatedParams, content, context);
     state.set(nodeId, result);
     
     const endTime = new Date();
@@ -144,68 +209,6 @@ export class DocumentExecutor<TApi = any> {
     return { nodes: state, metadata };
   }
   
-  /**
-   * Execute a single executable node
-   */
-  private async executeNode(
-    node: ExecutableNode,
-    context: NodeExecutionContext & { api?: TApi }
-  ): Promise<NodeExecutionResult> {
-    const startTime = Date.now();
-    
-    try {
-      // Resolve the function
-      const func = this.options.functions[node.fn];
-      if (!func) {
-        throw new Error(`Function not found: ${node.fn}`);
-      }
-      
-      // Validate parameters
-      let validatedParams: any;
-      try {
-        validatedParams = func.schema.parse(node.parameters);
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          throw new Error(`Invalid parameters: ${error.errors.map(e => e.message).join(', ')}`);
-        }
-        throw error;
-      }
-      
-      // Extract content as string
-      const content = this.extractContent(node.content);
-      
-      // Execute with timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Execution timeout')), this.options.timeout);
-      });
-      
-      const data = await Promise.race([
-        func.execute(validatedParams, content, context),
-        timeoutPromise,
-      ]);
-      
-      return {
-        success: true,
-        data,
-        duration: Date.now() - startTime,
-        timestamp: new Date(),
-      };
-      
-    } catch (error) {
-      const errorObj: NodeExecutionError = {
-        message: error instanceof Error ? error.message : String(error),
-        code: 'EXECUTION_ERROR',
-        details: error,
-      };
-      
-      return {
-        success: false,
-        error: errorObj,
-        duration: Date.now() - startTime,
-        timestamp: new Date(),
-      };
-    }
-  }
   
   /**
    * Find all executable nodes in document

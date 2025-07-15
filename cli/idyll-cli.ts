@@ -12,7 +12,7 @@ import { readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import chalk from 'chalk';
 import { parseXmlToAst, serializeAstToXml, validateDocument } from '../index';
-import type { FunctionResolver, FunctionExecutor, FunctionResult, ValidationContext, DocumentExecutionContext } from '../types';
+import type { FunctionResolver, FunctionImpl, FunctionResult, ValidationContext, DocumentExecutionContext } from '../types';
 
 // Mock function resolver for testing
 const mockFunctionResolver: FunctionResolver = {
@@ -34,8 +34,8 @@ const mockFunctionResolver: FunctionResolver = {
 };
 
 // Mock function executor for testing
-const mockFunctionExecutor: FunctionExecutor = {
-  async execute(functionName: string, params: Record<string, unknown>, context) {
+const mockFunctionExecutor: FunctionImpl = {
+  async execute(functionName: string, params: Record<string, unknown>, context: any) {
     console.log(chalk.blue(`Executing function: ${functionName}`));
     console.log(chalk.gray('Parameters:'), params);
     

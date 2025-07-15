@@ -165,7 +165,7 @@ async function executeDocument(
   
   // Create executor with demo tools
   const executor = new DocumentExecutor({
-    tools: createDemoTools(),
+    functions: createDemoTools(),
     onProgress: (blockId, current, total) => {
       console.log(pc.gray(`  [${current}/${total}] Executing block ${blockId}...`));
     },
@@ -173,8 +173,8 @@ async function executeDocument(
   
   // Execute
   const request = options.blockId
-    ? { mode: 'single' as const, document, blockId: options.blockId, options: { tools: createDemoTools() } }
-    : { mode: 'document' as const, document, options: { tools: createDemoTools() } };
+    ? { mode: 'single' as const, document, nodeId: options.blockId, options: { functions: createDemoTools() } }
+    : { mode: 'document' as const, document, options: { functions: createDemoTools() } };
     
   const report = await executor.execute(request);
   

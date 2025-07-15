@@ -180,9 +180,9 @@ export interface FunctionResolver {
 }
 
 /**
- * Interface for executing functions
+ * Interface for implementing functions
  */
-export interface FunctionExecutor {
+export interface FunctionImpl {
   /**
    * Execute a function with given parameters
    * @param functionName Function name

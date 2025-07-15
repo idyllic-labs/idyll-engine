@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { AgentDocument, Node, ContentNode } from '../document/ast';
 import { FunctionDefinition, FunctionRegistry } from '../document/function-registry';
-import { executeCustomFunction, parseCustomFunction } from '../document/custom-function-executor';
+import { executeCustomFunction, parseCustomFunction, AgentCustomFunctionExecutionOptions } from '../document/custom-function-executor';
 import { parseXmlToAst } from '../document/parser-grammar';
 
 /**
@@ -95,10 +95,11 @@ export function extractCustomFunctions(
           
           try {
             // Execute the custom function
-            const executionContext = await executeCustomFunction(customFunctionBlock, {
+            const executionOptions: AgentCustomFunctionExecutionOptions = {
               functions: baseFunctions,
               agentContext: agentContext,
-            });
+            };
+            const executionContext = await executeCustomFunction(customFunctionBlock, executionOptions);
             
             // Extract the final result
             const lastNodeId = Array.from(executionContext.nodes.keys()).pop();

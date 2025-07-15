@@ -45,7 +45,7 @@ const functions = createFunctionRegistry({
       return {
         message: params.shout ? message.toUpperCase() : message,
         executedAt: new Date().toISOString(),
-        blockId: context.currentBlockId,
+        nodeId: context.currentNodeId,
       };
     },
   }),
