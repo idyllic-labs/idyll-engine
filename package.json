@@ -25,7 +25,7 @@
     "test": "vitest",
     "cli": "bun run cli/idyll-cli.ts",
     "agent": "bun run cli/agent-cli.ts",
-    "prepublishOnly": "node -e \"if (!process.env.CI) { console.error('\\n❌ Publishing is only allowed through GitHub Actions\\n\\nTo publish a new version:\\n1. Update version in package.json\\n2. Commit and push to main\\n3. GitHub Actions will automatically publish\\n'); process.exit(1); }\""
+    "prepublishOnly": "bun run build && bun test"
   },
   "dependencies": {
     "date-fns": "^3.0.0",
@@ -48,9 +48,6 @@
   },
   "engines": {
     "node": ">=18"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
   },
   "repository": {
     "type": "git",

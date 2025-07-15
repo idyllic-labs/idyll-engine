@@ -1,0 +1,27 @@
+# Source files
+src/
+examples/
+cli/
+
+# Config files
+.github/
+.claude/
+tsconfig.json
+vitest.config.ts
+tsup.config.ts
+
+# Development files
+*.log
+.DS_Store
+node_modules/
+.env*
+
+# Documentation source
+docs/
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+
+# Build artifacts not needed
+*.tsbuildinfo
