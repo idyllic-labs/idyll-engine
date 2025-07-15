@@ -178,11 +178,14 @@ async function main() {
   
   // Parse the document
   const document = parseXmlToAst(xmlDocument);
-  console.log(`📄 Document parsed: ${document.nodes.length} nodes total\n`);
+  
+  // Type assertion since we know it's a document from the XML
+  const idyllDoc = document as IdyllDocument;
+  console.log(`📄 Document parsed: ${idyllDoc.nodes.length} nodes total\n`);
   
   // Find custom functions in the document
-  const customFunctions = document.nodes.filter(node => node.type === 'function');
-  const regularFunctions = document.nodes.filter(node => node.type === 'function_call');
+  const customFunctions = idyllDoc.nodes.filter((node: any) => node.type === 'function');
+  const regularFunctions = idyllDoc.nodes.filter((node: any) => node.type === 'function_call');
   
   console.log(`🔍 Found ${customFunctions.length} custom functions and ${regularFunctions.length} regular function calls\n`);
   

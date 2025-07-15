@@ -122,7 +122,10 @@ async function main() {
   
   // Parse the document
   const document = parseXmlToAst(xmlDocument);
-  console.log(`📄 Document parsed: ${document.nodes.length} nodes total\n`);
+  
+  // Type assertion since we know it's a document from the XML
+  const idyllDoc = document as IdyllDocument;
+  console.log(`📄 Document parsed: ${idyllDoc.nodes.length} nodes total\n`);
   
   // Create executor with hooks
   const executor = new DocumentExecutor({
@@ -140,7 +143,7 @@ async function main() {
   // Execute the document
   const report = await executor.execute({
     mode: 'document',
-    document,
+    document: idyllDoc,
     options: { functions, hooks }
   });
   

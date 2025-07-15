@@ -69,6 +69,8 @@ export class Agent {
    */
   private initializeTools() {
     // Extract custom functions from agent program
+    console.log('[Agent] Initializing tools, agent program has nodes:', this.program.nodes.length);
+    console.log('[Agent] Node types:', this.program.nodes.map(n => n.type));
     const customTools = extractCustomFunctions(this.program, this.functions, () => {
       // Get the last user message as agent context
       const lastUserMessage = this.currentMessages
@@ -80,7 +82,9 @@ export class Agent {
     });
 
     // Merge base functions with custom functions
+    console.log('[Agent] Custom tools extracted:', Object.keys(customTools));
     const allTools = mergeFunctionRegistries(this.functions, customTools);
+    console.log('[Agent] All tools after merge:', Object.keys(allTools).length, Object.keys(allTools));
 
     // Convert all functions to AI SDK tool format
     for (const [name, tool] of Object.entries(allTools)) {
@@ -175,6 +179,9 @@ export class Agent {
     );
     console.log(
       `[Agent] 📝 System prompt contains response_guidelines: ${systemPrompt.includes("response_guidelines")}`
+    );
+    console.log(
+      `[Agent] 📝 Available functions in system prompt: ${functionNames.filter(name => name.startsWith('custom')).join(', ')}`
     );
 
     return systemPrompt;

@@ -9,7 +9,8 @@ import {
   parseXmlToAst, 
   executeCustomFunction,
   AgentCustomFunctionExecutionOptions,
-  ExecutionHooks
+  ExecutionHooks,
+  IdyllDocument
 } from '../index';
 import { z } from 'zod';
 
@@ -24,7 +25,7 @@ const baseFunctions = createFunctionRegistry({
     execute: async (params, content, context) => {
       console.log(`🔄 Recursive call at depth ${params.depth}`);
       
-      if (params.depth >= params.maxDepth) {
+      if (params.depth >= (params.maxDepth ?? 3)) {
         return {
           depth: params.depth,
           message: `Base case reached at depth ${params.depth}`,
@@ -55,7 +56,7 @@ const baseFunctions = createFunctionRegistry({
       return {
         count: params.count,
         max: params.max,
-        done: params.count >= params.max,
+        done: (params.count ?? 0) >= (params.max ?? 5),
         message: `Count is ${params.count}, max is ${params.max}`
       };
     }
@@ -128,7 +129,14 @@ async function testRecursion() {
   console.log('🧪 Testing Recursion in Idyll Engine\n');
   
   const document = parseXmlToAst(xmlDocument);
-  const customFunctions = document.nodes.filter(node => node.type === 'function');
+  if ('type' in document && document.type !== 'document') {
+    console.error('Expected a document, got:', document.type);
+    return;
+  }
+  
+  // Type assertion since we know it's a document from the XML
+  const idyllDoc = document as IdyllDocument;
+  const customFunctions = idyllDoc.nodes.filter((node: any) => node.type === 'function');
   
   console.log(`🔍 Found ${customFunctions.length} custom functions to test\n`);
   

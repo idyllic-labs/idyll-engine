@@ -39,7 +39,14 @@ export function buildSystemPrompt(agent: AgentDocument, availableTools: string[]
     if (node.type === 'function') {
       // Extract function definition
       const title = node.props?.title as string || 'Untitled Function';
-      customTools.push(`Custom function: ${title}`);
+      // Convert title to the actual function name used in the registry
+      const functionName = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      // The actual callable name uses -- instead of :
+      const callableName = `custom--${functionName}`;
+      customTools.push(`- ${callableName} (Custom function: "${title}")`);
     } else if (node.type === 'trigger') {
       // Note triggers
       const trigger = node.props?.trigger as string;
@@ -57,7 +64,7 @@ export function buildSystemPrompt(agent: AgentDocument, availableTools: string[]
   
   // Add custom functions section
   if (customTools.length > 0) {
-    sections.push(`\nCustom functions defined:\n${customTools.join('\n')}`);
+    sections.push(`\nCustom functions defined:\n${customTools.join('\n')}\n\nIMPORTANT: When the user asks you to use a custom function by name, find the matching function in the available tools list and call it. Custom function names use double hyphens (--) instead of colons (:) when calling them.`);
   }
   
   // Add triggers section
