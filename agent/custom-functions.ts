@@ -36,6 +36,9 @@ export function extractCustomFunctions(
       // Extract function definition blocks from children
       const definitionBlocks = extractFunctionDefinitionBlocks(block);
       
+      console.log(`📋 Extracted ${definitionBlocks.length} definition blocks from function "${title}"`);
+      console.log('📋 Definition blocks:', JSON.stringify(definitionBlocks, null, 2));
+      
       if (definitionBlocks.length === 0) {
         console.warn(`Function "${title}" has no definition blocks`);
         continue;
