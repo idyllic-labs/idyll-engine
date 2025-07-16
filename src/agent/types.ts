@@ -6,6 +6,7 @@ import { Message, CoreTool, LanguageModelUsage, LanguageModel } from 'ai';
 import { AgentDocument } from '../document/ast';
 import type { FunctionRegistry } from '../document/function-registry';
 import type { ResponseMiddleware } from './response-pipeline';
+import type { LoggerConfig } from '../utils/logger';
 
 /**
  * Agent definition - the parsed AST of an <agent> document
@@ -20,6 +21,8 @@ export interface AgentConfig {
   model: LanguageModel;      // AI runtime
   functions: FunctionRegistry; // Function runtime
   responseMiddleware?: ResponseMiddleware[]; // Optional response processing middleware
+  customFunctionExecutor?: any; // Optional custom function executor
+  logging?: Partial<LoggerConfig>; // Optional logging configuration
 }
 
 /**

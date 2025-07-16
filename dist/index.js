@@ -3000,12 +3000,105 @@ When responding to user queries:
 
 // src/agent/custom-functions.ts
 import { z as z4 } from "zod";
-function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext) {
+
+// src/utils/logger.ts
+var LogLevel = /* @__PURE__ */ ((LogLevel2) => {
+  LogLevel2[LogLevel2["DEBUG"] = 0] = "DEBUG";
+  LogLevel2[LogLevel2["INFO"] = 1] = "INFO";
+  LogLevel2[LogLevel2["WARN"] = 2] = "WARN";
+  LogLevel2[LogLevel2["ERROR"] = 3] = "ERROR";
+  LogLevel2[LogLevel2["SILENT"] = 4] = "SILENT";
+  return LogLevel2;
+})(LogLevel || {});
+var Logger = class {
+  config;
+  constructor(config = {}) {
+    this.config = {
+      level: 2 /* WARN */,
+      // Default to WARN for production
+      enableColors: true,
+      includeTimestamp: false,
+      ...config
+    };
+  }
+  shouldLog(level) {
+    return level >= this.config.level;
+  }
+  formatMessage(level, message, ...args) {
+    const prefix = this.config.prefix ? `[${this.config.prefix}] ` : "";
+    const timestamp = this.config.includeTimestamp ? `${(/* @__PURE__ */ new Date()).toISOString()} ` : "";
+    let levelStr = "";
+    if (this.config.enableColors) {
+      switch (level) {
+        case 0 /* DEBUG */:
+          levelStr = "\x1B[36mDEBUG\x1B[0m";
+          break;
+        case 1 /* INFO */:
+          levelStr = "\x1B[34mINFO\x1B[0m";
+          break;
+        case 2 /* WARN */:
+          levelStr = "\x1B[33mWARN\x1B[0m";
+          break;
+        case 3 /* ERROR */:
+          levelStr = "\x1B[31mERROR\x1B[0m";
+          break;
+      }
+    } else {
+      levelStr = LogLevel[level];
+    }
+    return `${timestamp}${prefix}${levelStr}: ${message}`;
+  }
+  debug(message, ...args) {
+    if (this.shouldLog(0 /* DEBUG */)) {
+      console.log(this.formatMessage(0 /* DEBUG */, message), ...args);
+    }
+  }
+  info(message, ...args) {
+    if (this.shouldLog(1 /* INFO */)) {
+      console.log(this.formatMessage(1 /* INFO */, message), ...args);
+    }
+  }
+  warn(message, ...args) {
+    if (this.shouldLog(2 /* WARN */)) {
+      console.warn(this.formatMessage(2 /* WARN */, message), ...args);
+    }
+  }
+  error(message, ...args) {
+    if (this.shouldLog(3 /* ERROR */)) {
+      console.error(this.formatMessage(3 /* ERROR */, message), ...args);
+    }
+  }
+  // Convenience methods for common patterns
+  execution(message, ...args) {
+    this.debug(`\u{1F527} ${message}`, ...args);
+  }
+  agent(message, ...args) {
+    this.debug(`[Agent] ${message}`, ...args);
+  }
+  function(message, ...args) {
+    this.debug(`\u{1F3AF} ${message}`, ...args);
+  }
+  // Update configuration
+  setLevel(level) {
+    this.config.level = level;
+  }
+  setConfig(config) {
+    this.config = { ...this.config, ...config };
+  }
+};
+var logger = new Logger();
+var createLogger = (prefix, level = 2 /* WARN */) => {
+  return new Logger({ prefix, level });
+};
+
+// src/agent/custom-functions.ts
+function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext, customFunctionExecutor) {
   const customFunctions = {};
-  console.log("\u{1F50D} Extracting custom functions from agent document...");
+  const logger2 = createLogger("CustomFunctions", 2 /* WARN */);
+  logger2.debug("Extracting custom functions from agent document...");
   for (const block of agentDoc.nodes) {
     if (block.type === "function" && "props" in block) {
-      console.log("\u{1F4E6} Found function block:", JSON.stringify(block, null, 2));
+      logger2.debug("Found function block:", JSON.stringify(block, null, 2));
       const title = block.props?.title || "Untitled Function";
       const icon = block.props?.icon;
       const description = extractTextContent2(block);
@@ -3054,7 +3147,7 @@ function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext) {
               functions: baseFunctions,
               agentContext
             };
-            const executionContext = await executeCustomFunction(customFunctionBlock, executionOptions);
+            const executionContext = customFunctionExecutor ? await customFunctionExecutor.execute(customFunctionBlock, executionOptions) : await executeCustomFunction(customFunctionBlock, executionOptions);
             const lastNodeId = Array.from(executionContext.nodes.keys()).pop();
             const lastResult = lastNodeId ? executionContext.nodes.get(lastNodeId) : void 0;
             console.log(`\u{1F50D} Execution complete. Last node ID: ${lastNodeId}`);
@@ -3160,10 +3253,20 @@ var Agent = class {
   aiTools = {};
   currentMessages = [];
   responsePipeline;
+  config;
+  logger;
   constructor(config) {
+    this.config = config;
     this.program = config.program;
     this.model = config.model;
     this.functions = config.functions;
+    this.logger = new Logger({
+      prefix: "Agent",
+      level: config.logging?.level ?? 2 /* WARN */,
+      enableColors: config.logging?.enableColors ?? true,
+      includeTimestamp: config.logging?.includeTimestamp ?? false,
+      ...config.logging
+    });
     this.memory = new ActivityMemory();
     this.context = {
       agentId: this.program.id,
@@ -3179,13 +3282,11 @@ var Agent = class {
    * Initialize tools for AI SDK (converts functions to AI tools)
    */
   initializeTools() {
-    console.log(
-      "[Agent] Initializing tools, agent program has nodes:",
-      this.program.nodes.length
+    this.logger.debug(
+      `Initializing tools, agent program has nodes: ${this.program.nodes.length}`
     );
-    console.log(
-      "[Agent] Node types:",
-      this.program.nodes.map((n) => n.type)
+    this.logger.debug(
+      `Node types: ${this.program.nodes.map((n) => n.type).join(", ")}`
     );
     const customTools = extractCustomFunctions(
       this.program,
@@ -3193,14 +3294,14 @@ var Agent = class {
       () => {
         const lastUserMessage = this.currentMessages.filter((m) => m.role === "user").pop();
         return typeof lastUserMessage?.content === "string" ? lastUserMessage.content : JSON.stringify(lastUserMessage?.content || "");
-      }
+      },
+      this.config.customFunctionExecutor
+      // Pass the custom executor
     );
-    console.log("[Agent] Custom tools extracted:", Object.keys(customTools));
+    this.logger.debug(`Custom tools extracted: ${Object.keys(customTools).join(", ")}`);
     const allTools = mergeFunctionRegistries(this.functions, customTools);
-    console.log(
-      "[Agent] All tools after merge:",
-      Object.keys(allTools).length,
-      Object.keys(allTools)
+    this.logger.debug(
+      `All tools after merge: ${Object.keys(allTools).length} tools (${Object.keys(allTools).join(", ")})`
     );
     for (const [name, functionDef] of Object.entries(allTools)) {
       const aiToolName = toAzureFunctionName(name);
@@ -3208,7 +3309,7 @@ var Agent = class {
         description: functionDef.description || "",
         parameters: functionDef.schema,
         execute: async (params) => {
-          console.log(`\u{1F527} Executing function: ${name}`);
+          this.logger.execution(`Executing function: ${name}`);
           const context = {
             currentNodeId: uuidv43(),
             previousResults: /* @__PURE__ */ new Map(),
@@ -3226,7 +3327,7 @@ var Agent = class {
             });
             const isCustomFunction = name.startsWith("custom:");
             if (isCustomFunction) {
-              console.log(`\u{1F3AF} Custom function ${name} executed and compressed`);
+              this.logger.function(`Custom function ${name} executed and compressed`);
             }
             this.memory.add({
               type: "tool",
@@ -3256,8 +3357,8 @@ var Agent = class {
         }
       });
       if (name === "documents:create") {
-        console.log("[Agent] Created tool:", createdTool);
-        console.log("[Agent] Tool parameters:", createdTool.parameters);
+        this.logger.debug(`Created tool: ${name}`);
+        this.logger.debug(`Tool parameters:`, createdTool.parameters);
       }
       this.aiTools[aiToolName] = createdTool;
     }
@@ -3273,14 +3374,14 @@ var Agent = class {
       functionNames,
       memoryContext
     );
-    console.log(
-      `[Agent] \u{1F4DD} System prompt generated (${systemPrompt.length} chars)`
+    this.logger.debug(
+      `System prompt generated (${systemPrompt.length} chars)`
     );
-    console.log(
-      `[Agent] \u{1F4DD} System prompt contains response_guidelines: ${systemPrompt.includes("response_guidelines")}`
+    this.logger.debug(
+      `System prompt contains response_guidelines: ${systemPrompt.includes("response_guidelines")}`
     );
-    console.log(
-      `[Agent] \u{1F4DD} Available functions in system prompt: ${functionNames.filter((name) => name.startsWith("custom")).join(", ")}`
+    this.logger.debug(
+      `Available functions in system prompt: ${functionNames.filter((name) => name.startsWith("custom")).join(", ")}`
     );
     return systemPrompt;
   }
@@ -3291,16 +3392,16 @@ var Agent = class {
     this.currentMessages = messages;
     const userMessage = messages[messages.length - 1]?.content;
     if (options && "tools" in options) {
-      console.log("[Agent] WARNING: chat() received options with tools property!", options.tools);
+      this.logger.warn("chat() received options with tools property!", options.tools);
     }
     try {
       const activity = this.memory.add({
         type: "chat",
         userMessage: typeof userMessage === "string" ? userMessage : JSON.stringify(userMessage)
       });
-      console.log("[Agent] About to call generateText with tools:", Object.keys(this.aiTools));
+      this.logger.debug(`About to call generateText with tools: ${Object.keys(this.aiTools).join(", ")}`);
       if (this.aiTools["documents--create"]) {
-        console.log("[Agent] documents--create tool in generateText:", this.aiTools["documents--create"]);
+        this.logger.debug("documents--create tool in generateText:", this.aiTools["documents--create"]);
       }
       const result = await generateText({
         ...options,
@@ -3350,10 +3451,10 @@ var Agent = class {
         type: "chat",
         userMessage: typeof userMessage === "string" ? userMessage : JSON.stringify(userMessage)
       });
-      console.log("[Agent] About to call streamText with tools:", Object.keys(this.aiTools));
+      this.logger.debug(`About to call streamText with tools: ${Object.keys(this.aiTools).join(", ")}`);
       if (this.aiTools["documents--create"]) {
-        console.log("[Agent] documents--create tool:", this.aiTools["documents--create"]);
-        console.log("[Agent] documents--create parameters:", this.aiTools["documents--create"].parameters);
+        this.logger.debug("documents--create tool:", this.aiTools["documents--create"]);
+        this.logger.debug("documents--create parameters:", this.aiTools["documents--create"].parameters);
       }
       const result = await streamText({
         ...options,
@@ -3365,8 +3466,8 @@ var Agent = class {
         maxSteps: options?.maxSteps ?? 10,
         temperature: options?.temperature ?? 0.7,
         onFinish: async ({ text, toolCalls, usage, finishReason }) => {
-          console.log(
-            `[Agent] \u{1F3AF} Final finish - reason: ${finishReason}, text length: ${text.length}, functionCalls: ${toolCalls?.length || 0}`
+          this.logger.info(
+            `Final finish - reason: ${finishReason}, text length: ${text.length}, functionCalls: ${toolCalls?.length || 0}`
           );
           activity.assistantMessage = text;
           if (toolCalls && toolCalls.length > 0) {
@@ -3429,6 +3530,8 @@ export {
   DocumentExecutor,
   GRAMMAR,
   GrammarCompiler,
+  LogLevel,
+  Logger,
   ResponsePipeline,
   applyDiff,
   applyResolvedVariables,
@@ -3437,6 +3540,7 @@ export {
   buildSystemPrompt,
   checkVariableRedeclaration,
   createFunctionRegistry,
+  createLogger,
   createSimpleRegistry,
   defineFunction,
   executeCustomFunction,
@@ -3454,6 +3558,7 @@ export {
   isMention,
   isTextContent,
   isVariable,
+  logger,
   mergeFunctionRegistries,
   parseCustomFunction,
   parseFunctionName,

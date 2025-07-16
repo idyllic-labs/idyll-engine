@@ -10,6 +10,7 @@ import { AgentDocument, Node, ContentNode } from '../document/ast';
 import { FunctionDefinition, FunctionRegistry } from '../document/function-registry';
 import { executeCustomFunction, parseCustomFunction, AgentCustomFunctionExecutionOptions } from '../document/custom-function-executor';
 import { parseXmlToAst } from '../grammar/parser';
+import { createLogger, LogLevel } from '../utils/logger';
 
 /**
  * Extract custom functions from agent document and convert them to tools
@@ -17,16 +18,18 @@ import { parseXmlToAst } from '../grammar/parser';
 export function extractCustomFunctions(
   agentDoc: AgentDocument,
   baseFunctions: FunctionRegistry,
-  getAgentContext?: () => string
+  getAgentContext?: () => string,
+  customFunctionExecutor?: any
 ): FunctionRegistry {
   const customFunctions: FunctionRegistry = {};
+  const logger = createLogger('CustomFunctions', LogLevel.WARN);
   
-  console.log('🔍 Extracting custom functions from agent document...');
+  logger.debug('Extracting custom functions from agent document...');
   
   // Find all function blocks
   for (const block of agentDoc.nodes) {
     if (block.type === 'function' && 'props' in block) {
-      console.log('📦 Found function block:', JSON.stringify(block, null, 2));
+      logger.debug('Found function block:', JSON.stringify(block, null, 2));
       const title = block.props?.title as string || 'Untitled Function';
       const icon = block.props?.icon as string;
       
@@ -36,11 +39,11 @@ export function extractCustomFunctions(
       // Extract function definition blocks from children
       const definitionBlocks = extractFunctionDefinitionBlocks(block);
       
-      console.log(`📋 Extracted ${definitionBlocks.length} definition blocks from function "${title}"`);
-      console.log('📋 Definition blocks:', JSON.stringify(definitionBlocks, null, 2));
+      logger.debug(`Extracted ${definitionBlocks.length} definition blocks from function "${title}"`);
+      logger.debug('Definition blocks:', JSON.stringify(definitionBlocks, null, 2));
       
       if (definitionBlocks.length === 0) {
-        console.warn(`Function "${title}" has no definition blocks`);
+        logger.warn(`Function "${title}" has no definition blocks`);
         continue;
       }
       
@@ -59,7 +62,7 @@ export function extractCustomFunctions(
             .optional(),
         }),
         execute: async (params, content, context) => {
-          console.log(`🛠️ Executing custom function: ${title}`);
+          logger.debug(`Executing custom function: ${title}`);
           
           // Create a virtual document with the function definition
           const functionDoc = {
@@ -91,10 +94,10 @@ export function extractCustomFunctions(
             agentContext = `Function invoked: ${title}`;
           }
           
-          console.log(`📝 Agent context for variable resolution: "${agentContext}"`);
-          console.log(`📦 Params:`, params);
-          console.log(`📄 Content:`, content);
-          console.log(`🔍 GetAgentContext available:`, !!getAgentContext);
+          logger.debug(`Agent context for variable resolution: "${agentContext}"`);
+          logger.debug(`Params:`, params);
+          logger.debug(`Content:`, content);
+          logger.debug(`GetAgentContext available:`, !!getAgentContext);
           
           try {
             // Execute the custom function
@@ -102,26 +105,30 @@ export function extractCustomFunctions(
               functions: baseFunctions,
               agentContext: agentContext,
             };
-            const executionContext = await executeCustomFunction(customFunctionBlock, executionOptions);
+            
+            // Use custom executor if provided, otherwise use default
+            const executionContext = customFunctionExecutor 
+              ? await customFunctionExecutor.execute(customFunctionBlock, executionOptions)
+              : await executeCustomFunction(customFunctionBlock, executionOptions);
             
             // Extract the final result
             const lastNodeId = Array.from(executionContext.nodes.keys()).pop();
             const lastResult = lastNodeId ? executionContext.nodes.get(lastNodeId) : undefined;
             
-            console.log(`🔍 Execution complete. Last node ID: ${lastNodeId}`);
-            console.log(`📋 Last result:`, lastResult);
-            console.log(`📊 All nodes:`, Array.from(executionContext.nodes.entries()));
+            logger.debug(`Execution complete. Last node ID: ${lastNodeId}`);
+            logger.debug(`Last result:`, lastResult);
+            logger.debug(`All nodes:`, Array.from(executionContext.nodes.entries()));
             
             // Check if we have any successful results
             const results = Array.from(executionContext.nodes.values());
-            const successfulResults = results.filter(r => r.success);
-            const failedResults = results.filter(r => !r.success);
+            const successfulResults = results.filter((r: any) => r.success);
+            const failedResults = results.filter((r: any) => !r.success);
             
-            console.log(`📊 Execution summary: ${successfulResults.length} successful, ${failedResults.length} failed`);
+            logger.debug(`Execution summary: ${successfulResults.length} successful, ${failedResults.length} failed`);
             
             // If we have successful results, return the full context for compression
             if (successfulResults.length > 0) {
-              console.log(`📦 Returning full FunctionExecutionReport for compression`);
+              logger.debug(`Returning full FunctionExecutionReport for compression`);
               return executionContext;
             }
             
@@ -136,7 +143,7 @@ export function extractCustomFunctions(
             // Fallback
             return executionContext;
           } catch (error) {
-            console.error(`❌ Custom function "${title}" failed:`, error);
+            logger.error(`Custom function "${title}" failed:`, error);
             throw error;
           }
         },

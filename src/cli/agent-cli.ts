@@ -18,6 +18,7 @@ import { z } from "zod";
 import path from "path";
 import fs from "fs/promises";
 import { createAzure } from "@ai-sdk/azure";
+import { LogLevel } from "../utils/logger";
 
 // Create readline interface
 const rl = readline.createInterface({ input, output });
@@ -139,6 +140,11 @@ const commands = {
         program: agentDoc,
         model,
         functions: createDemoTools(),
+        logging: {
+          level: LogLevel.INFO, // CLI can be more verbose
+          enableColors: true,
+          includeTimestamp: false,
+        },
       });
 
       currentAgentPath = agentPath;

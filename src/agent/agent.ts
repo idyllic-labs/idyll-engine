@@ -34,6 +34,7 @@ import {
   toAzureFunctionName,
   fromAzureFunctionName,
 } from "../document/function-naming";
+import { Logger, LogLevel } from "../utils/logger";
 
 type GenerateTextOptions = Parameters<typeof generateText>[0];
 type StreamTextOptions = Parameters<typeof streamText>[0];
@@ -50,11 +51,23 @@ export class Agent {
   private aiTools: Record<string, CoreTool> = {};
   private currentMessages: Message[] = [];
   private responsePipeline: ResponsePipeline;
+  private config: AgentConfig;
+  private logger: Logger;
 
   constructor(config: AgentConfig) {
+    this.config = config;
     this.program = config.program;
     this.model = config.model;
     this.functions = config.functions;
+
+    // Initialize logger with configuration
+    this.logger = new Logger({
+      prefix: 'Agent',
+      level: config.logging?.level ?? LogLevel.WARN,
+      enableColors: config.logging?.enableColors ?? true,
+      includeTimestamp: config.logging?.includeTimestamp ?? false,
+      ...config.logging,
+    });
 
     this.memory = new ActivityMemory();
     this.context = {
@@ -77,13 +90,11 @@ export class Agent {
    */
   private initializeTools() {
     // Extract custom functions from agent program
-    console.log(
-      "[Agent] Initializing tools, agent program has nodes:",
-      this.program.nodes.length
+    this.logger.debug(
+      `Initializing tools, agent program has nodes: ${this.program.nodes.length}`
     );
-    console.log(
-      "[Agent] Node types:",
-      this.program.nodes.map((n) => n.type)
+    this.logger.debug(
+      `Node types: ${this.program.nodes.map((n) => n.type).join(', ')}`
     );
     const customTools = extractCustomFunctions(
       this.program,
@@ -96,16 +107,15 @@ export class Agent {
         return typeof lastUserMessage?.content === "string"
           ? lastUserMessage.content
           : JSON.stringify(lastUserMessage?.content || "");
-      }
+      },
+      this.config.customFunctionExecutor // Pass the custom executor
     );
 
     // Merge base functions with custom functions
-    console.log("[Agent] Custom tools extracted:", Object.keys(customTools));
+    this.logger.debug(`Custom tools extracted: ${Object.keys(customTools).join(', ')}`);
     const allTools = mergeFunctionRegistries(this.functions, customTools);
-    console.log(
-      "[Agent] All tools after merge:",
-      Object.keys(allTools).length,
-      Object.keys(allTools)
+    this.logger.debug(
+      `All tools after merge: ${Object.keys(allTools).length} tools (${Object.keys(allTools).join(', ')})`
     );
 
     // Convert all functions to AI SDK tool format
@@ -119,7 +129,7 @@ export class Agent {
         description: functionDef.description || "",
         parameters: functionDef.schema,
         execute: async (params: any) => {
-          console.log(`🔧 Executing function: ${name}`);
+          this.logger.execution(`Executing function: ${name}`);
 
           // Create execution context
           const context: NodeExecutionContext = {
@@ -145,7 +155,7 @@ export class Agent {
 
             const isCustomFunction = name.startsWith("custom:");
             if (isCustomFunction) {
-              console.log(`🎯 Custom function ${name} executed and compressed`);
+              this.logger.function(`Custom function ${name} executed and compressed`);
             }
 
             // Track function call in activity memory
@@ -183,8 +193,8 @@ export class Agent {
       });
       
       if (name === 'documents:create') {
-        console.log('[Agent] Created tool:', createdTool);
-        console.log('[Agent] Tool parameters:', createdTool.parameters);
+        this.logger.debug(`Created tool: ${name}`);
+        this.logger.debug(`Tool parameters:`, createdTool.parameters);
       }
       
       this.aiTools[aiToolName] = createdTool;
@@ -204,14 +214,14 @@ export class Agent {
       memoryContext
     );
 
-    console.log(
-      `[Agent] 📝 System prompt generated (${systemPrompt.length} chars)`
+    this.logger.debug(
+      `System prompt generated (${systemPrompt.length} chars)`
     );
-    console.log(
-      `[Agent] 📝 System prompt contains response_guidelines: ${systemPrompt.includes("response_guidelines")}`
+    this.logger.debug(
+      `System prompt contains response_guidelines: ${systemPrompt.includes("response_guidelines")}`
     );
-    console.log(
-      `[Agent] 📝 Available functions in system prompt: ${functionNames.filter((name) => name.startsWith("custom")).join(", ")}`
+    this.logger.debug(
+      `Available functions in system prompt: ${functionNames.filter((name) => name.startsWith("custom")).join(", ")}`
     );
 
     return systemPrompt;
@@ -231,7 +241,7 @@ export class Agent {
 
     // Debug: Check if options contains tools
     if (options && 'tools' in options) {
-      console.log('[Agent] WARNING: chat() received options with tools property!', options.tools);
+      this.logger.warn('chat() received options with tools property!', options.tools);
     }
 
     try {
@@ -245,9 +255,9 @@ export class Agent {
       });
 
       // Debug: Log what we're passing to generateText
-      console.log('[Agent] About to call generateText with tools:', Object.keys(this.aiTools));
+      this.logger.debug(`About to call generateText with tools: ${Object.keys(this.aiTools).join(', ')}`);
       if (this.aiTools['documents--create']) {
-        console.log('[Agent] documents--create tool in generateText:', this.aiTools['documents--create']);
+        this.logger.debug('documents--create tool in generateText:', this.aiTools['documents--create']);
       }
       
       const result = await generateText({
@@ -314,10 +324,10 @@ export class Agent {
       });
 
       // Debug tools before calling streamText
-      console.log('[Agent] About to call streamText with tools:', Object.keys(this.aiTools));
+      this.logger.debug(`About to call streamText with tools: ${Object.keys(this.aiTools).join(', ')}`);
       if (this.aiTools['documents--create']) {
-        console.log('[Agent] documents--create tool:', this.aiTools['documents--create']);
-        console.log('[Agent] documents--create parameters:', this.aiTools['documents--create'].parameters);
+        this.logger.debug('documents--create tool:', this.aiTools['documents--create']);
+        this.logger.debug('documents--create parameters:', this.aiTools['documents--create'].parameters);
       }
       
       const result = await streamText({
@@ -330,8 +340,8 @@ export class Agent {
         maxSteps: options?.maxSteps ?? 10,
         temperature: options?.temperature ?? 0.7,
         onFinish: async ({ text, toolCalls, usage, finishReason }) => {
-          console.log(
-            `[Agent] 🎯 Final finish - reason: ${finishReason}, text length: ${text.length}, functionCalls: ${toolCalls?.length || 0}`
+          this.logger.info(
+            `Final finish - reason: ${finishReason}, text length: ${text.length}, functionCalls: ${toolCalls?.length || 0}`
           );
 
           // Update activity when stream finishes

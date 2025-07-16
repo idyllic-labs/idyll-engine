@@ -73,3 +73,7 @@ export type {
   AgentExecuteOptions,
   AgentExecuteResult 
 } from './agent/types';
+
+// Logging utilities
+export { Logger, LogLevel, logger, createLogger } from './utils/logger';
+export type { LoggerConfig } from './utils/logger';
