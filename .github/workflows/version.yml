@@ -3,8 +3,8 @@ name: Version Management
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version type (patch, minor, major) or specific version'
+      version_type:
+        description: 'Version bump type'
         required: true
         default: 'patch'
         type: choice
@@ -12,6 +12,10 @@ on:
           - patch
           - minor
           - major
+      custom_version:
+        description: 'Or specify custom version (e.g., 4.3.0) - overrides type'
+        required: false
+        type: string
 
 jobs:
   version:
@@ -38,9 +42,16 @@ jobs:
           
       - name: Bump version
         run: |
-          npm version ${{ github.event.inputs.version }} --no-git-tag-version
+          if [ -n "${{ github.event.inputs.custom_version }}" ]; then
+            echo "Using custom version: ${{ github.event.inputs.custom_version }}"
+            npm version ${{ github.event.inputs.custom_version }} --no-git-tag-version
+          else
+            echo "Using version type: ${{ github.event.inputs.version_type }}"
+            npm version ${{ github.event.inputs.version_type }} --no-git-tag-version
+          fi
           VERSION=$(node -p "require('./package.json').version")
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "🔢 New version: $VERSION"
           
       - name: Update CHANGELOG
         run: |

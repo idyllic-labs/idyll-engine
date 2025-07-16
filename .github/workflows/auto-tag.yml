@@ -1,0 +1,73 @@
+name: Auto Tag on Version Change
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'package.json'
+
+jobs:
+  auto-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      
+      - name: Check version change
+        id: version-check
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          # Check if this push changed package.json version
+          if git diff HEAD~1 HEAD --name-only | grep -q "package.json"; then
+            PREV_VERSION=$(git show HEAD~1:package.json | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8')).version")
+            if [ "$CURRENT_VERSION" != "$PREV_VERSION" ]; then
+              echo "version-changed=true" >> $GITHUB_OUTPUT
+              echo "🔄 Version changed: $PREV_VERSION → $CURRENT_VERSION"
+            else
+              echo "version-changed=false" >> $GITHUB_OUTPUT
+              echo "📦 Version unchanged: $CURRENT_VERSION"
+            fi
+          else
+            echo "version-changed=false" >> $GITHUB_OUTPUT
+            echo "📦 package.json not modified"
+          fi
+      
+      - name: Check if tag exists
+        id: tag-check
+        if: steps.version-check.outputs.version-changed == 'true'
+        run: |
+          if git tag -l | grep -q "^v${{ steps.version-check.outputs.current-version }}$"; then
+            echo "tag-exists=true" >> $GITHUB_OUTPUT
+            echo "🏷️ Tag v${{ steps.version-check.outputs.current-version }} already exists"
+          else
+            echo "tag-exists=false" >> $GITHUB_OUTPUT
+            echo "🏷️ Tag v${{ steps.version-check.outputs.current-version }} does not exist"
+          fi
+      
+      - name: Create and push tag
+        if: steps.version-check.outputs.version-changed == 'true' && steps.tag-check.outputs.tag-exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          echo "🚀 Creating tag v${{ steps.version-check.outputs.current-version }}"
+          git tag -a "v${{ steps.version-check.outputs.current-version }}" -m "Release v${{ steps.version-check.outputs.current-version }}"
+          git push origin "v${{ steps.version-check.outputs.current-version }}"
+          
+          echo "✅ Tag created and pushed successfully!"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Skip tagging
+        if: steps.version-check.outputs.version-changed == 'false' || steps.tag-check.outputs.tag-exists == 'true'
+        run: |
+          if [ "${{ steps.version-check.outputs.version-changed }}" == "false" ]; then
+            echo "⏭️ No version change detected, skipping tag creation"
+          elif [ "${{ steps.tag-check.outputs.tag-exists }}" == "true" ]; then
+            echo "⏭️ Tag already exists, skipping tag creation"
+          fi
