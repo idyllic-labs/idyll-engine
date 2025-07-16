@@ -29,7 +29,9 @@
       "Bash(tree:*)",
       "Bash(chmod:*)",
       "Bash(./run-all-demos.sh:*)",
-      "Bash(./run-working-demos.sh:*)"
+      "Bash(./run-working-demos.sh:*)",
+      "Bash(npm deprecate:*)",
+      "Bash(npm:*)"
     ],
     "deny": []
   }

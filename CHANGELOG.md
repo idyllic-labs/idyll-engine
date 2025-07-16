@@ -5,12 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.1] - 2025-01-16
+
+### Fixed
+- **CRITICAL**: Downgraded Zod from 3.25.67 to 3.24.1 for compatibility and stability
+- Updated agent to use proper AI SDK v4 `tool()` function instead of object format
+- Fixed function execution and instrumentation logging in agent system
+- Improved error handling and debug output throughout agent execution
+
+### Added
+- Comprehensive test coverage for agent functionality
+- Demo runner scripts (`run-all-demos.sh` and `run-working-demos.sh`) for showcasing features
+- Enhanced agent function registry integration with proper schema validation
+
+### Changed
+- Agent tools now properly use AI SDK v4 tool creation pattern
+- Improved function execution context and result processing
+
+## [4.3.0] - 2025-01-16
+
+### ⚠️ DEPRECATED
+**This version contains critical compatibility issues with Zod 3.25.67. Please upgrade to 4.3.1 immediately.**
+
+### Changed
+- Upgraded Zod to 3.25.67 (caused compatibility issues)
+
 ## [4.2.1] - 2025-01-16
+
+### ⚠️ DEPRECATED
+**This version may contain Zod compatibility issues. Please upgrade to 4.3.1 for stability.**
 
 ### Fixed
 - Improved GitHub Actions workflows for automated publishing and tagging
 
 ## [4.2.0] - 2025-01-16
+
+### ⚠️ DEPRECATED
+**This version contains Zod compatibility issues. Please upgrade to 4.3.1 for stability.**
 
 ### Added
 - Comprehensive Zod validation system integrated into XML parsing pipeline
