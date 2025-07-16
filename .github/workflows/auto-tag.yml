@@ -1,4 +1,9 @@
-name: Auto Tag on Version Change
+# Auto-tagging workflow with quality gates
+# This workflow automatically creates Git tags when package.json version changes,
+# but only after ensuring that typecheck, tests, and build all pass.
+# This prevents tagging broken versions.
+
+name: Auto Tag on Version Change (with Quality Checks)
 
 on:
   push:
@@ -15,6 +20,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
+      
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
       
       - name: Check version change
         id: version-check
@@ -36,6 +48,22 @@ jobs:
             echo "version-changed=false" >> $GITHUB_OUTPUT
             echo "📦 package.json not modified"
           fi
+      
+      - name: Run quality checks
+        if: steps.version-check.outputs.version-changed == 'true'
+        run: |
+          echo "🔍 Running quality checks before tagging..."
+          
+          echo "📝 Type checking..."
+          bun run typecheck
+          
+          echo "🧪 Running tests..."
+          bun test
+          
+          echo "🏗️ Building..."
+          bun run build
+          
+          echo "✅ All quality checks passed!"
       
       - name: Check if tag exists
         id: tag-check
