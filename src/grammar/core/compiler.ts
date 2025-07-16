@@ -8,7 +8,7 @@
  * 4. Schema for backward compatibility
  */
 
-import type { Rule, AttributeDef } from './grammar';
+import type { Rule, AttributeDef } from './dsl';
 
 // Define types locally since we removed schema.ts
 export interface ElementSchema {

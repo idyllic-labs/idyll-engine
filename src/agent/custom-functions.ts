@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { AgentDocument, Node, ContentNode } from '../document/ast';
 import { FunctionDefinition, FunctionRegistry } from '../document/function-registry';
 import { executeCustomFunction, parseCustomFunction, AgentCustomFunctionExecutionOptions } from '../document/custom-function-executor';
-import { parseXmlToAst } from '../document/parser-grammar';
+import { parseXmlToAst } from '../grammar/parser';
 
 /**
  * Extract custom functions from agent document and convert them to tools

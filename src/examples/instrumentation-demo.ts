@@ -3,7 +3,7 @@
  * Instrumentation Demo - Shows execution hooks with timing
  */
 
-import { DocumentExecutor, createFunctionRegistry, defineFunction, parseXmlToAst, ExecutionHooks } from '../index';
+import { DocumentExecutor, createFunctionRegistry, defineFunction, parseXmlToAst, ExecutionHooks, IdyllDocument } from '../index';
 import { z } from 'zod';
 
 // Create some demo functions with artificial delays

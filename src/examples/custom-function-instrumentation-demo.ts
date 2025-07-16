@@ -7,7 +7,8 @@
 import { 
   DocumentExecutor, 
   createFunctionRegistry, 
-  defineFunction, 
+  defineFunction,
+  IdyllDocument, 
   parseXmlToAst, 
   ExecutionHooks,
   executeCustomFunction,
@@ -196,7 +197,7 @@ async function main() {
   // Execute custom functions manually to show instrumentation
   for (let i = 0; i < customFunctions.length; i++) {
     const customFunction = customFunctions[i];
-    console.log(`\n[${ i + 1}/${customFunctions.length}] Custom Function: ${customFunction.title}`);
+    console.log(`\n[${ i + 1}/${customFunctions.length}] Custom Function: ${(customFunction as any).props?.title || 'Untitled'}`);
     console.log('─'.repeat(60));
     
     // Simulate agent context for variable resolution

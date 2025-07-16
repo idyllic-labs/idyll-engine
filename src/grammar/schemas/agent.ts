@@ -4,7 +4,7 @@
  * Defines the structure for agent documents containing system prompts.
  */
 
-import { Rule, terminal, seq, zeroOrMore } from './grammar-dsl';
+import { Rule, terminal, seq, zeroOrMore } from '../core/dsl';
 
 export const AGENT_GRAMMAR: Record<string, Rule> = {
   // Agent system prompt root

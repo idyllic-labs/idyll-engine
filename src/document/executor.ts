@@ -100,7 +100,7 @@ export class DocumentExecutor<TApi = any> extends AbstractFunctionExecutor {
           success: false,
           error: {
             message: error instanceof z.ZodError 
-              ? `Invalid parameters: ${error.errors.map(e => e.message).join(', ')}`
+              ? `Invalid parameters: ${error.issues.map((e: any) => e.message).join(', ')}`
               : 'Parameter validation failed',
             code: 'INVALID_PARAMETERS',
             details: error
@@ -183,7 +183,7 @@ export class DocumentExecutor<TApi = any> extends AbstractFunctionExecutor {
       validatedParams = func.schema.parse(executableNode.parameters);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new Error(`Invalid parameters: ${error.errors.map(e => e.message).join(', ')}`);
+        throw new Error(`Invalid parameters: ${error.issues.map((e: any) => e.message).join(', ')}`);
       }
       throw error;
     }

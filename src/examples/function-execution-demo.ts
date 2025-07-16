@@ -13,7 +13,7 @@
  */
 
 import { z } from "zod";
-import { parseXmlToAst } from "../document/parser-grammar";
+import { parseXmlToAst } from "../grammar/parser";
 import { createFunctionRegistry, defineFunction } from "../document/function-registry";
 import { executeCustomFunction, parseCustomFunction } from "../document/custom-function-executor";
 

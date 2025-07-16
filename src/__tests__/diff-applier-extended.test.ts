@@ -10,8 +10,8 @@ import { isContentNode, isExecutableNode } from '../document/ast';
 console.log('🧪 Extended Diff Implementation Tests\n');
 
 // Helper to create test blocks
-function createBlocks(count: number): Block[] {
-  const blocks: Block[] = [];
+function createBlocks(count: number): Node[] {
+  const blocks: Node[] = [];
   for (let i = 0; i < count; i++) {
     if (i % 3 === 0) {
       blocks.push({
@@ -19,22 +19,22 @@ function createBlocks(count: number): Block[] {
         type: 'paragraph',
         content: [{ type: 'text', text: `Paragraph ${i}` }],
         props: { index: i }
-      } as ContentBlock);
+      } as ContentNode);
     } else if (i % 3 === 1) {
       blocks.push({
         id: `block${i}`,
         type: 'heading',
         content: [{ type: 'text', text: `Heading ${i}` }],
         props: { level: (i % 6) + 1 }
-      } as ContentBlock);
+      } as ContentNode);
     } else {
       blocks.push({
         id: `block${i}`,
         type: 'function_call',
-        tool: `demo:tool${i}`,
+        fn: `demo:tool${i}`,
         parameters: { value: i },
-        instructions: [{ type: 'text', text: `Function ${i}` }]
-      } as ExecutableBlock);
+        content: [{ type: 'text', text: `Function ${i}` }]
+      } as ExecutableNode);
     }
   }
   return blocks;
@@ -48,14 +48,14 @@ console.log('Test 1a: Bulk Move');
 const blocks1 = createBlocks(10);
 const bulkMoveOp: EditOperation = {
   type: 'move',
-  blockIds: 'block1,block3,block5',
+  blockIds: ['block1', 'block3', 'block5'],
   atEnd: true
 };
 
 const result1a = applyDiff(blocks1, [bulkMoveOp]);
 console.log('Success:', result1a.success);
 if (result1a.success) {
-  const lastThree = result1a.blocks?.slice(-3).map(b => b.id);
+  const lastThree = result1a.nodes?.slice(-3).map(b => b.id);
   console.log('Last three blocks:', lastThree);
   console.log('Should be: [block1, block3, block5]');
 }
@@ -73,7 +73,7 @@ const rangeMoveOp: EditOperation = {
 const result1b = applyDiff(blocks1, [rangeMoveOp]);
 console.log('Success:', result1b.success);
 if (result1b.success) {
-  const firstThree = result1b.blocks?.slice(0, 3).map(b => b.id);
+  const firstThree = result1b.nodes?.slice(0, 3).map(b => b.id);
   console.log('First three blocks:', firstThree);
   console.log('Should be: [block2, block3, block4]');
 }
@@ -90,7 +90,7 @@ const noOpMoveOp: EditOperation = {
 const result1c = applyDiff(blocks1, [noOpMoveOp]);
 console.log('Success:', result1c.success);
 if (result1c.success) {
-  console.log('First block still:', result1c.blocks?.[0].id);
+  console.log('First block still:', result1c.nodes?.[0].id);
 }
 console.log();
 
@@ -108,8 +108,8 @@ const emptyContentOp: EditOperation = {
 const result2a = applyDiff(blocks1, [emptyContentOp]);
 console.log('Success:', result2a.success);
 if (result2a.success) {
-  const block = result2a.blocks?.find(b => b.id === 'block0');
-  if (block && isContentBlock(block)) {
+  const block = result2a.nodes?.find(b => b.id === 'block0');
+  if (block && isContentNode(block)) {
     console.log('Content is empty:', block.content.length === 0);
   }
 }
@@ -126,8 +126,8 @@ const emptyParamsOp: EditOperation = {
 const result2b = applyDiff(blocks1, [emptyParamsOp]);
 console.log('Success:', result2b.success);
 if (result2b.success) {
-  const block = result2b.blocks?.find(b => b.id === 'block2');
-  if (block && isExecutableBlock(block)) {
+  const block = result2b.nodes?.find(b => b.id === 'block2');
+  if (block && isExecutableNode(block)) {
     console.log('Params are empty:', Object.keys(block.parameters).length === 0);
   }
 }
@@ -143,7 +143,7 @@ const emptyInsertOp: EditOperation = {
 
 const result2c = applyDiff(blocks1, [emptyInsertOp]);
 console.log('Success:', result2c.success);
-console.log('Block count unchanged:', result2c.blocks?.length === blocks1.length);
+console.log('Block count unchanged:', result2c.nodes?.length === blocks1.length);
 console.log();
 
 // Test 3: Error Conditions
@@ -181,7 +181,7 @@ console.log('Test 3c: Move with Conflicting Specs');
 const invalidMoveOp: EditOperation = {
   type: 'move',
   blockId: 'block1',
-  blockIds: 'block2,block3', // Both single and multiple!
+  blockIds: ['block2', 'block3'], // Both single and multiple!
   atEnd: true
 };
 
@@ -221,16 +221,16 @@ const complexOps: EditOperation[] = [
 const result4 = applyDiff(blocks1, complexOps);
 console.log('Success:', result4.success);
 if (result4.success) {
-  const renamedBlock = result4.blocks?.find(b => b.id === 'block0-renamed');
+  const renamedBlock = result4.nodes?.find(b => b.id === 'block0-renamed');
   console.log('Found renamed block:', !!renamedBlock);
-  if (renamedBlock && isContentBlock(renamedBlock)) {
+  if (renamedBlock && isContentNode(renamedBlock)) {
     console.log('Has updated className:', renamedBlock.props?.className === 'updated');
     console.log('Has updated content:', renamedBlock.content[0]?.text === 'Updated text');
   }
   
   // Check position
-  const blockIndex = result4.blocks?.findIndex(b => b.id === 'block0-renamed') ?? -1;
-  const block5Index = result4.blocks?.findIndex(b => b.id === 'block5') ?? -1;
+  const blockIndex = result4.nodes?.findIndex(b => b.id === 'block0-renamed') ?? -1;
+  const block5Index = result4.nodes?.findIndex(b => b.id === 'block5') ?? -1;
   console.log('Is after block5:', blockIndex === block5Index + 1);
 }
 console.log();
@@ -253,7 +253,7 @@ const endTime1 = performance.now();
 
 console.log('Success:', result5a.success);
 console.log(`Time taken: ${(endTime1 - startTime1).toFixed(2)}ms`);
-console.log('Final block count:', result5a.blocks?.length);
+console.log('Final block count:', result5a.nodes?.length);
 console.log();
 
 // 5b: Many operations
@@ -311,7 +311,7 @@ const endTime2 = performance.now();
 
 console.log('Success:', result5b.success);
 console.log(`Time taken: ${(endTime2 - startTime2).toFixed(2)}ms`);
-console.log('Final block count:', result5b.blocks?.length);
+console.log('Final block count:', result5b.nodes?.length);
 console.log(`Operations per millisecond: ${(100 / (endTime2 - startTime2)).toFixed(2)}`);
 console.log();
 

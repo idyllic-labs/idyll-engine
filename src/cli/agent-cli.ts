@@ -9,7 +9,7 @@
 import * as readline from "readline/promises";
 import { stdin as input, stdout as output } from "process";
 import chalk from "chalk";
-import { parseXmlToAst } from "../document/parser-grammar";
+import { parseXmlToAst } from "../grammar/parser";
 import { AgentDocument } from "../document/ast";
 import { Agent } from "../agent/agent";
 import { createFunctionRegistry, defineFunction } from "../document/function-registry";

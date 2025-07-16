@@ -14,7 +14,7 @@
  */
 
 import { z } from "zod";
-import { parseXmlToAst, serializeAstToXml } from "../document/parser-grammar";
+import { parseXmlToAst, serializeAstToXml } from "../grammar/parser";
 import { DocumentExecutor } from "../document/executor";
 import { createFunctionRegistry, defineFunction } from "../document/function-registry";
 import type { NodeExecutionContext } from "../document/execution-types";

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { parseXmlToAst, serializeAstToXml } from '../document/parser-grammar';
+import { parseXmlToAst, serializeAstToXml } from '../grammar/parser';
 import {
   extractVariableDefinitions,
   checkVariableRedeclaration,

@@ -4,7 +4,7 @@
  * Defines the structure for content documents with blocks and rich text.
  */
 
-import { Rule, terminal, seq, choice, repeat, optional, ref, oneOrMore, zeroOrMore } from './grammar-dsl';
+import { Rule, terminal, seq, choice, repeat, optional, ref, oneOrMore, zeroOrMore } from '../core/dsl';
 
 export const DOCUMENT_GRAMMAR: Record<string, Rule> = {
   // Document root

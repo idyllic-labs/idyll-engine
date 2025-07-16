@@ -8,7 +8,7 @@
 export * from './document/ast';
 
 // Document parsing and serialization
-export { parseXmlToAst, serializeAstToXml } from './document/parser-grammar';
+export { parseXmlToAst, serializeAstToXml } from './grammar/parser';
 
 // Document execution
 export { DocumentExecutor } from './document/executor';
@@ -44,8 +44,8 @@ export {
 } from './types';
 
 // Grammar system (for advanced usage)
-export { GRAMMAR } from './document/grammar';
-export { GrammarCompiler } from './document/grammar-compiler';
+export { GRAMMAR } from './grammar';
+export { GrammarCompiler } from './grammar/core/compiler';
 
 // Variable resolution system
 export * from './document/variable-resolution';

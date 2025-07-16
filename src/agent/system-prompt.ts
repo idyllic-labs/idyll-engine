@@ -8,7 +8,7 @@
  */
 
 import { AgentDocument, Node, isExecutableNode, isTextContent } from '../document/ast';
-import { serializeAstToXml } from '../document/parser-grammar';
+import { serializeAstToXml } from '../grammar/parser';
 
 /**
  * Build system prompt from agent document

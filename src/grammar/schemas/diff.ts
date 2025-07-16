@@ -4,7 +4,7 @@
  * Defines the structure for diff operations that modify documents.
  */
 
-import { Rule, terminal, seq, oneOrMore, choice, ref } from './grammar-dsl';
+import { Rule, terminal, seq, oneOrMore, choice, ref } from '../core/dsl';
 
 export const DIFF_GRAMMAR: Record<string, Rule> = {
   // Diff operations root

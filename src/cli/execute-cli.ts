@@ -2,7 +2,7 @@
 
 import { parseArgs } from 'util';
 import { readFileSync, writeFileSync } from 'fs';
-import { parseXmlToAst, serializeAstToXml } from '../document/parser-grammar';
+import { parseXmlToAst, serializeAstToXml } from '../grammar/parser';
 import type { IdyllDocument, AgentDocument, DiffDocument } from '../document/ast';
 import { DocumentExecutor } from '../document/executor';
 import { createDemoTools } from './demo-tools';

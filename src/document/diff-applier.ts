@@ -17,19 +17,31 @@ import {
   ReplaceOperation,
   MoveOperation
 } from './ast';
+import { 
+  validateEditOperations, 
+  validateNodes,
+  safeValidateEditOperation 
+} from '../grammar/validation';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface DiffResult {
   success: boolean;
   nodes?: Node[];
   error?: string;
+  validationErrors?: string[];
 }
 
 /**
- * Apply a list of edit operations to document nodes
+ * Apply a list of edit operations to document nodes with validation
  */
 export function applyDiff(nodes: Node[], operations: EditOperation[]): DiffResult {
   try {
+    // Validate input nodes
+    validateNodes(nodes);
+    
+    // Validate all operations before applying any
+    validateEditOperations(operations);
+    
     let result = [...nodes];
 
     for (const operation of operations) {
@@ -71,6 +83,9 @@ export function applyDiff(nodes: Node[], operations: EditOperation[]): DiffResul
       }
     }
 
+    // Validate the final result
+    validateNodes(result);
+    
     return { success: true, nodes: result };
   } catch (error) {
     return { 
@@ -79,6 +94,39 @@ export function applyDiff(nodes: Node[], operations: EditOperation[]): DiffResul
       error: error instanceof Error ? error.message : String(error) 
     };
   }
+}
+
+/**
+ * Safe version of applyDiff that returns detailed validation errors
+ */
+export function safeApplyDiff(nodes: Node[], operations: EditOperation[]): DiffResult {
+  const validationErrors: string[] = [];
+  
+  try {
+    // Validate input nodes
+    validateNodes(nodes);
+  } catch (error) {
+    validationErrors.push(`Invalid input nodes: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  
+  // Validate each operation individually for detailed error reporting
+  for (let i = 0; i < operations.length; i++) {
+    const validation = safeValidateEditOperation(operations[i]);
+    if (!validation.success) {
+      validationErrors.push(`Operation ${i}: ${validation.error.message}`);
+    }
+  }
+  
+  if (validationErrors.length > 0) {
+    return {
+      success: false,
+      nodes,
+      validationErrors
+    };
+  }
+  
+  // If validation passes, apply the diff normally
+  return applyDiff(nodes, operations);
 }
 
 // ============================================

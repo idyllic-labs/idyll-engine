@@ -129,7 +129,7 @@ async function testRecursion() {
   console.log('🧪 Testing Recursion in Idyll Engine\n');
   
   const document = parseXmlToAst(xmlDocument);
-  if ('type' in document && document.type !== 'document') {
+  if ('type' in document) {
     console.error('Expected a document, got:', document.type);
     return;
   }
@@ -142,7 +142,7 @@ async function testRecursion() {
   
   for (let i = 0; i < customFunctions.length; i++) {
     const customFunction = customFunctions[i];
-    console.log(`\n[${i + 1}/${customFunctions.length}] Testing: ${customFunction.title}`);
+    console.log(`\n[${i + 1}/${customFunctions.length}] Testing: ${(customFunction as any).props?.title || 'Untitled'}`);
     console.log('═'.repeat(60));
     
     const agentContext = `Testing recursion scenario ${i + 1}`;
@@ -154,9 +154,9 @@ async function testRecursion() {
         agentContext: agentContext
       };
       
-      const result = await executeCustomFunction(customFunction, options);
+      const result = await executeCustomFunction(customFunction as any, options);
       
-      console.log(`✅ Custom function completed: ${customFunction.title}`);
+      console.log(`✅ Custom function completed: ${(customFunction as any).props?.title || 'Untitled'}`);
       console.log(`   ⏱️  Total duration: ${result.metadata.duration.toFixed(2)}ms`);
       console.log(`   📊 Nodes executed: ${result.metadata.nodesExecuted}`);
       console.log(`   ✅ Successful: ${result.metadata.nodesSucceeded}`);

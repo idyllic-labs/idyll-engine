@@ -24,7 +24,9 @@
       "Bash(git mv:*)",
       "Bash(rg:*)",
       "Bash(timeout:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(cp:*)",
+      "Bash(tree:*)"
     ],
     "deny": []
   }

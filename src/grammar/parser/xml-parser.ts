@@ -25,10 +25,15 @@ import {
   ContentNodeType,
   isExecutableNode,
   isTextContent,
-} from "./ast";
-import { ParseError } from "../types";
-import { GRAMMAR } from "./grammar";
-import { GrammarCompiler } from "./grammar-compiler";
+} from "../../document/ast";
+import { ParseError } from "../../types";
+import { GRAMMAR } from "../index";
+import { GrammarCompiler } from "../core/compiler";
+import { 
+  validateDocument, 
+  validateAgentDocument, 
+  validateDiffDocument 
+} from "../validation";
 
 // Initialize grammar compiler
 const compiler = new GrammarCompiler(GRAMMAR);
@@ -80,12 +85,39 @@ export function parseXmlToAst(
   }
 
   switch (rootElement.name) {
-    case "document":
-      return parseDocument(rootElement);
-    case "agent":
-      return parseAgent(rootElement);
-    case "diff":
-      return parseDiff(rootElement);
+    case "document": {
+      const document = parseDocument(rootElement);
+      // Validate the parsed document with Zod
+      try {
+        return validateDocument(document);
+      } catch (error) {
+        throw new ParseError(
+          `Document validation failed: ${error instanceof Error ? error.message : 'Unknown validation error'}`
+        );
+      }
+    }
+    case "agent": {
+      const agent = parseAgent(rootElement);
+      // Validate the parsed agent document with Zod
+      try {
+        return validateAgentDocument(agent);
+      } catch (error) {
+        throw new ParseError(
+          `Agent document validation failed: ${error instanceof Error ? error.message : 'Unknown validation error'}`
+        );
+      }
+    }
+    case "diff": {
+      const diff = parseDiff(rootElement);
+      // Validate the parsed diff document with Zod
+      try {
+        return validateDiffDocument(diff);
+      } catch (error) {
+        throw new ParseError(
+          `Diff document validation failed: ${error instanceof Error ? error.message : 'Unknown validation error'}`
+        );
+      }
+    }
     default:
       throw new ParseError(
         `Unknown root element: ${rootElement.name}. Expected: document, agent, or diff`
@@ -456,9 +488,9 @@ function parseFunction(
   return {
     id,
     type: "function" as ContentNodeType,
-    content: [{ type: "text", text: description }],
+    content: [], // Empty content array, description is in props
     children: definition.length > 0 ? definition : undefined,
-    props: { title, icon },
+    props: { title, icon, description },
   };
 }
 
@@ -832,10 +864,8 @@ function serializeExecutableNode(node: ExecutableNode): xml2js.Element {
 function serializeFunctionNode(node: ContentNode): xml2js.Element {
   const elements: xml2js.Element[] = [];
 
-  // Add description
-  const description = node.content
-    .map((c) => (isTextContent(c) ? c.text : ""))
-    .join("");
+  // Add description from props
+  const description = (node.props?.description as string) || "";
 
   elements.push({
     type: "element",

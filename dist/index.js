@@ -1,4 +1,4 @@
-// document/ast.ts
+// src/document/ast.ts
 function isContentNode(node) {
   return !isExecutableNode(node);
 }
@@ -82,11 +82,11 @@ function extractVariables(nodes) {
   return variables;
 }
 
-// document/parser-grammar.ts
+// src/grammar/parser/xml-parser.ts
 import * as xml2js from "xml-js";
 import { v4 as uuidv4 } from "uuid";
 
-// types.ts
+// src/types.ts
 var IdyllEngineError = class extends Error {
   constructor(message, code, details) {
     super(message);
@@ -102,7 +102,7 @@ var ParseError = class extends IdyllEngineError {
   }
 };
 
-// document/grammars/grammar-dsl.ts
+// src/grammar/core/dsl.ts
 function terminal(element, attrs, content) {
   return { type: "terminal", element, attributes: attrs, content };
 }
@@ -138,317 +138,7 @@ function ref(name) {
 var zeroOrMore = (rule) => repeat(rule, 0, null);
 var oneOrMore = (rule) => repeat(rule, 1, null);
 
-// document/grammars/document-grammar.ts
-var DOCUMENT_GRAMMAR = {
-  // Document root
-  document: seq(
-    terminal("document", {
-      id: { type: "string", required: false },
-      version: { type: "string", required: false },
-      created: { type: "string", required: false },
-      modified: { type: "string", required: false }
-    }),
-    zeroOrMore("block")
-  ),
-  // Blocks
-  block: choice(
-    "content-block",
-    "executable-block",
-    "function-block"
-  ),
-  "content-block": choice(
-    "paragraph",
-    "heading",
-    "bullet-list-item",
-    "numbered-list-item",
-    "checklist-item",
-    "code",
-    "quote",
-    "separator",
-    "data"
-  ),
-  "executable-block": choice(
-    "function-call",
-    "trigger"
-  ),
-  // Content blocks
-  paragraph: choice(
-    terminal("p", {}, "rich"),
-    terminal("paragraph", {}, "rich")
-    // legacy support
-  ),
-  heading: choice(
-    terminal("h1", {}, "rich"),
-    terminal("h2", {}, "rich"),
-    terminal("h3", {}, "rich"),
-    terminal("h4", {}, "rich"),
-    terminal("h5", {}, "rich"),
-    terminal("h6", {}, "rich"),
-    terminal("heading", {
-      // legacy support
-      level: { type: "number", required: true, validate: (v) => {
-        const num = Number(v);
-        return num >= 1 && num <= 6 ? null : "Level must be 1-6";
-      } }
-    }, "rich")
-  ),
-  // List items (individual blocks, no containers)
-  "bullet-list-item": terminal("bulletlistitem", {}, "rich"),
-  "numbered-list-item": terminal("numberedlistitem", {}, "rich"),
-  "checklist-item": terminal("checklistitem", {
-    checked: { type: "boolean", required: true }
-  }, "rich"),
-  code: terminal("code", {
-    language: { type: "string", required: false }
-  }, "text"),
-  quote: terminal("quote", {
-    author: { type: "string", required: false },
-    source: { type: "string", required: false }
-  }, "rich"),
-  separator: terminal("separator", {}, "none"),
-  data: terminal("data", {
-    title: { type: "string", required: false }
-  }, "text"),
-  // Executable blocks
-  "function-call": seq(
-    terminal("fncall", {
-      "idyll-fn": {
-        type: "string",
-        required: true,
-        // Format: \"module:function\" or just \"function\" (e.g., \"demo:echo\", \"ai:analyzeText\", \"echo\")
-        // Module and function names MUST be valid JS identifiers
-        // For Azure Functions compatibility, transform at adapter layer:
-        // \"module:function\" → \"module--function\" (double hyphen separator)
-        pattern: /^([a-zA-Z_$][a-zA-Z0-9_$]*:)?[a-zA-Z_$][a-zA-Z0-9_$]*$/
-      },
-      modelId: { type: "string", required: false }
-    }),
-    optional("params"),
-    optional("content"),
-    optional("result")
-  ),
-  trigger: seq(
-    terminal("trigger", {
-      "idyll-trigger": {
-        type: "string",
-        required: true,
-        // Format: \"module:trigger\" or just \"trigger\" (e.g., \"time:schedule\", \"webhook:receive\", \"daily\")
-        // Module and trigger names MUST be valid JS identifiers
-        // For Azure Functions compatibility, transform at adapter layer:
-        // \"module:trigger\" → \"module--trigger\" (double hyphen separator)
-        pattern: /^([a-zA-Z_$][a-zA-Z0-9_$]*:)?[a-zA-Z_$][a-zA-Z0-9_$]*$/
-      },
-      enabled: { type: "boolean", default: true }
-    }),
-    optional("params"),
-    optional("content")
-  ),
-  // Function blocks (custom function definitions)
-  "function-block": seq(
-    terminal("function", {
-      title: { type: "string", required: true },
-      icon: { type: "string", required: false }
-    }),
-    ref("function-description"),
-    ref("function-definition")
-  ),
-  "function-description": terminal("function:description", {}, "text"),
-  "function-definition": seq(
-    terminal("function:definition"),
-    zeroOrMore(choice("content-block", "executable-block"))
-    // no nested function blocks!
-  ),
-  // Function call children
-  params: seq(
-    terminal("params"),
-    ref("json-content")
-  ),
-  content: seq(
-    terminal("content"),
-    ref("rich-content")
-  ),
-  result: seq(
-    terminal("result"),
-    ref("json-content")
-  ),
-  // Content types
-  "rich-content": zeroOrMore(choice(
-    "text",
-    "styled-text",
-    "mention",
-    "variable",
-    "link",
-    "annotation",
-    "annotated-text",
-    "ai-edit-response"
-  )),
-  "text-content": terminal("_text", {}, "text"),
-  // pseudo-element for plain text
-  "json-content": terminal("_json", {}, "json"),
-  // pseudo-element for JSON
-  // Inline elements
-  "styled-text": choice(
-    seq(choice(terminal("strong"), terminal("b")), ref("rich-content")),
-    seq(choice(terminal("em"), terminal("i")), ref("rich-content")),
-    seq(choice(terminal("u"), terminal("underline")), ref("rich-content")),
-    seq(choice(terminal("s"), terminal("strike"), terminal("del")), ref("rich-content")),
-    seq(choice(terminal("code"), terminal("tt")), ref("rich-content"))
-  ),
-  annotation: seq(
-    terminal("annotation", {
-      title: { type: "string", required: false },
-      comment: { type: "string", required: false },
-      confidence: { type: "number", required: false }
-    }),
-    ref("rich-content")
-  ),
-  mention: choice(
-    terminal("mention:user", {
-      id: { type: "string", required: true },
-      label: { type: "string", required: false }
-    }, "text"),
-    terminal("mention:document", {
-      id: { type: "string", required: true },
-      label: { type: "string", required: false }
-    }, "text"),
-    terminal("mention:agent", {
-      id: { type: "string", required: true },
-      label: { type: "string", required: false }
-    }, "text"),
-    terminal("mention:custom", {
-      id: { type: "string", required: true },
-      type: { type: "string", required: true },
-      label: { type: "string", required: false }
-    }, "text")
-  ),
-  variable: terminal("variable", {
-    name: { type: "string", required: true },
-    prompt: { type: "string", required: false },
-    value: { type: "string", required: false }
-  }, "none"),
-  link: seq(
-    terminal("a", {
-      href: { type: "string", required: true, pattern: /^https?:\/\/.+/ }
-    }),
-    ref("rich-content")
-  ),
-  "annotated-text": seq(
-    terminal("annotatedtext", {
-      annotation: { type: "string", required: true }
-    }),
-    ref("rich-content")
-  ),
-  "ai-edit-response": seq(
-    terminal("aieditresponse", {
-      status: { type: "enum", values: ["pending", "accepted", "rejected"], required: true }
-    }),
-    ref("rich-content")
-  ),
-  text: terminal("_text", {}, "text")
-  // Raw text node
-};
-
-// document/grammars/agent-grammar.ts
-var AGENT_GRAMMAR = {
-  // Agent system prompt root
-  agent: seq(
-    terminal("agent", {
-      id: { type: "string", required: false },
-      name: { type: "string", required: false },
-      description: { type: "string", required: false },
-      model: { type: "string", required: false }
-    }),
-    zeroOrMore("block")
-  )
-};
-
-// document/grammars/diff-grammar.ts
-var DIFF_GRAMMAR = {
-  // Diff operations root
-  diff: seq(
-    terminal("diff", {
-      targetDocument: { type: "string", required: false },
-      timestamp: { type: "string", required: false }
-    }),
-    oneOrMore("edit-operation")
-  ),
-  // Edit operations
-  "edit-operation": choice(
-    "edit-attr",
-    "edit-content",
-    "edit-params",
-    "edit-id",
-    "insert",
-    "delete",
-    "replace",
-    "move"
-  ),
-  "edit-attr": terminal("edit:attr", {
-    "block-id": { type: "string", required: true },
-    name: { type: "string", required: true },
-    value: { type: "string", required: true }
-  }, "none"),
-  "edit-content": seq(
-    terminal("edit:content", {
-      "block-id": { type: "string", required: true }
-    }),
-    ref("rich-content")
-  ),
-  "edit-params": seq(
-    terminal("edit:params", {
-      "block-id": { type: "string", required: true }
-    }),
-    ref("json-content")
-  ),
-  "edit-id": terminal("edit:id", {
-    "block-id": { type: "string", required: true },
-    value: { type: "string", required: true }
-  }, "none"),
-  insert: seq(
-    terminal("insert", {
-      "after-block-id": { type: "string", required: false },
-      "before-block-id": { type: "string", required: false },
-      "at-start": { type: "boolean", required: false },
-      "at-end": { type: "boolean", required: false }
-    }),
-    oneOrMore("block")
-  ),
-  delete: terminal("delete", {
-    "block-id": { type: "string", required: true }
-  }, "none"),
-  replace: seq(
-    terminal("replace", {
-      "block-id": { type: "string", required: true }
-    }),
-    oneOrMore("block")
-  ),
-  move: terminal("move", {
-    "block-id": { type: "string", required: false },
-    "block-ids": { type: "string", required: false },
-    "from-block-id": { type: "string", required: false },
-    "to-block-id": { type: "string", required: false },
-    "after-block-id": { type: "string", required: false },
-    "before-block-id": { type: "string", required: false },
-    "at-start": { type: "boolean", required: false },
-    "at-end": { type: "boolean", required: false }
-  }, "none")
-};
-
-// document/grammars/index.ts
-var GRAMMAR = {
-  // Root types
-  root: choice(
-    "document",
-    "agent",
-    "diff"
-  ),
-  // Merge all grammar rules
-  ...DOCUMENT_GRAMMAR,
-  ...AGENT_GRAMMAR,
-  ...DIFF_GRAMMAR
-};
-
-// document/grammar-compiler.ts
+// src/grammar/core/compiler.ts
 var GrammarCompiler = class {
   grammar;
   compiled = null;
@@ -689,7 +379,553 @@ var GrammarCompiler = class {
   }
 };
 
-// document/parser-grammar.ts
+// src/grammar/schemas/document.ts
+var DOCUMENT_GRAMMAR = {
+  // Document root
+  document: seq(
+    terminal("document", {
+      id: { type: "string", required: false },
+      version: { type: "string", required: false },
+      created: { type: "string", required: false },
+      modified: { type: "string", required: false }
+    }),
+    zeroOrMore("block")
+  ),
+  // Blocks
+  block: choice(
+    "content-block",
+    "executable-block",
+    "function-block"
+  ),
+  "content-block": choice(
+    "paragraph",
+    "heading",
+    "bullet-list-item",
+    "numbered-list-item",
+    "checklist-item",
+    "code",
+    "quote",
+    "separator",
+    "data"
+  ),
+  "executable-block": choice(
+    "function-call",
+    "trigger"
+  ),
+  // Content blocks
+  paragraph: choice(
+    terminal("p", {}, "rich"),
+    terminal("paragraph", {}, "rich")
+    // legacy support
+  ),
+  heading: choice(
+    terminal("h1", {}, "rich"),
+    terminal("h2", {}, "rich"),
+    terminal("h3", {}, "rich"),
+    terminal("h4", {}, "rich"),
+    terminal("h5", {}, "rich"),
+    terminal("h6", {}, "rich"),
+    terminal("heading", {
+      // legacy support
+      level: { type: "number", required: true, validate: (v) => {
+        const num = Number(v);
+        return num >= 1 && num <= 6 ? null : "Level must be 1-6";
+      } }
+    }, "rich")
+  ),
+  // List items (individual blocks, no containers)
+  "bullet-list-item": terminal("bulletlistitem", {}, "rich"),
+  "numbered-list-item": terminal("numberedlistitem", {}, "rich"),
+  "checklist-item": terminal("checklistitem", {
+    checked: { type: "boolean", required: true }
+  }, "rich"),
+  code: terminal("code", {
+    language: { type: "string", required: false }
+  }, "text"),
+  quote: terminal("quote", {
+    author: { type: "string", required: false },
+    source: { type: "string", required: false }
+  }, "rich"),
+  separator: terminal("separator", {}, "none"),
+  data: terminal("data", {
+    title: { type: "string", required: false }
+  }, "text"),
+  // Executable blocks
+  "function-call": seq(
+    terminal("fncall", {
+      "idyll-fn": {
+        type: "string",
+        required: true,
+        // Format: \"module:function\" or just \"function\" (e.g., \"demo:echo\", \"ai:analyzeText\", \"echo\")
+        // Module and function names MUST be valid JS identifiers
+        // For Azure Functions compatibility, transform at adapter layer:
+        // \"module:function\" → \"module--function\" (double hyphen separator)
+        pattern: /^([a-zA-Z_$][a-zA-Z0-9_$]*:)?[a-zA-Z_$][a-zA-Z0-9_$]*$/
+      },
+      modelId: { type: "string", required: false }
+    }),
+    optional("params"),
+    optional("content"),
+    optional("result")
+  ),
+  trigger: seq(
+    terminal("trigger", {
+      "idyll-trigger": {
+        type: "string",
+        required: true,
+        // Format: \"module:trigger\" or just \"trigger\" (e.g., \"time:schedule\", \"webhook:receive\", \"daily\")
+        // Module and trigger names MUST be valid JS identifiers
+        // For Azure Functions compatibility, transform at adapter layer:
+        // \"module:trigger\" → \"module--trigger\" (double hyphen separator)
+        pattern: /^([a-zA-Z_$][a-zA-Z0-9_$]*:)?[a-zA-Z_$][a-zA-Z0-9_$]*$/
+      },
+      enabled: { type: "boolean", default: true }
+    }),
+    optional("params"),
+    optional("content")
+  ),
+  // Function blocks (custom function definitions)
+  "function-block": seq(
+    terminal("function", {
+      title: { type: "string", required: true },
+      icon: { type: "string", required: false }
+    }),
+    ref("function-description"),
+    ref("function-definition")
+  ),
+  "function-description": terminal("function:description", {}, "text"),
+  "function-definition": seq(
+    terminal("function:definition"),
+    zeroOrMore(choice("content-block", "executable-block"))
+    // no nested function blocks!
+  ),
+  // Function call children
+  params: seq(
+    terminal("params"),
+    ref("json-content")
+  ),
+  content: seq(
+    terminal("content"),
+    ref("rich-content")
+  ),
+  result: seq(
+    terminal("result"),
+    ref("json-content")
+  ),
+  // Content types
+  "rich-content": zeroOrMore(choice(
+    "text",
+    "styled-text",
+    "mention",
+    "variable",
+    "link",
+    "annotation",
+    "annotated-text",
+    "ai-edit-response"
+  )),
+  "text-content": terminal("_text", {}, "text"),
+  // pseudo-element for plain text
+  "json-content": terminal("_json", {}, "json"),
+  // pseudo-element for JSON
+  // Inline elements
+  "styled-text": choice(
+    seq(choice(terminal("strong"), terminal("b")), ref("rich-content")),
+    seq(choice(terminal("em"), terminal("i")), ref("rich-content")),
+    seq(choice(terminal("u"), terminal("underline")), ref("rich-content")),
+    seq(choice(terminal("s"), terminal("strike"), terminal("del")), ref("rich-content")),
+    seq(choice(terminal("code"), terminal("tt")), ref("rich-content"))
+  ),
+  annotation: seq(
+    terminal("annotation", {
+      title: { type: "string", required: false },
+      comment: { type: "string", required: false },
+      confidence: { type: "number", required: false }
+    }),
+    ref("rich-content")
+  ),
+  mention: choice(
+    terminal("mention:user", {
+      id: { type: "string", required: true },
+      label: { type: "string", required: false }
+    }, "text"),
+    terminal("mention:document", {
+      id: { type: "string", required: true },
+      label: { type: "string", required: false }
+    }, "text"),
+    terminal("mention:agent", {
+      id: { type: "string", required: true },
+      label: { type: "string", required: false }
+    }, "text"),
+    terminal("mention:custom", {
+      id: { type: "string", required: true },
+      type: { type: "string", required: true },
+      label: { type: "string", required: false }
+    }, "text")
+  ),
+  variable: terminal("variable", {
+    name: { type: "string", required: true },
+    prompt: { type: "string", required: false },
+    value: { type: "string", required: false }
+  }, "none"),
+  link: seq(
+    terminal("a", {
+      href: { type: "string", required: true, pattern: /^https?:\/\/.+/ }
+    }),
+    ref("rich-content")
+  ),
+  "annotated-text": seq(
+    terminal("annotatedtext", {
+      annotation: { type: "string", required: true }
+    }),
+    ref("rich-content")
+  ),
+  "ai-edit-response": seq(
+    terminal("aieditresponse", {
+      status: { type: "enum", values: ["pending", "accepted", "rejected"], required: true }
+    }),
+    ref("rich-content")
+  ),
+  text: terminal("_text", {}, "text")
+  // Raw text node
+};
+
+// src/grammar/schemas/agent.ts
+var AGENT_GRAMMAR = {
+  // Agent system prompt root
+  agent: seq(
+    terminal("agent", {
+      id: { type: "string", required: false },
+      name: { type: "string", required: false },
+      description: { type: "string", required: false },
+      model: { type: "string", required: false }
+    }),
+    zeroOrMore("block")
+  )
+};
+
+// src/grammar/schemas/diff.ts
+var DIFF_GRAMMAR = {
+  // Diff operations root
+  diff: seq(
+    terminal("diff", {
+      targetDocument: { type: "string", required: false },
+      timestamp: { type: "string", required: false }
+    }),
+    oneOrMore("edit-operation")
+  ),
+  // Edit operations
+  "edit-operation": choice(
+    "edit-attr",
+    "edit-content",
+    "edit-params",
+    "edit-id",
+    "insert",
+    "delete",
+    "replace",
+    "move"
+  ),
+  "edit-attr": terminal("edit:attr", {
+    "block-id": { type: "string", required: true },
+    name: { type: "string", required: true },
+    value: { type: "string", required: true }
+  }, "none"),
+  "edit-content": seq(
+    terminal("edit:content", {
+      "block-id": { type: "string", required: true }
+    }),
+    ref("rich-content")
+  ),
+  "edit-params": seq(
+    terminal("edit:params", {
+      "block-id": { type: "string", required: true }
+    }),
+    ref("json-content")
+  ),
+  "edit-id": terminal("edit:id", {
+    "block-id": { type: "string", required: true },
+    value: { type: "string", required: true }
+  }, "none"),
+  insert: seq(
+    terminal("insert", {
+      "after-block-id": { type: "string", required: false },
+      "before-block-id": { type: "string", required: false },
+      "at-start": { type: "boolean", required: false },
+      "at-end": { type: "boolean", required: false }
+    }),
+    oneOrMore("block")
+  ),
+  delete: terminal("delete", {
+    "block-id": { type: "string", required: true }
+  }, "none"),
+  replace: seq(
+    terminal("replace", {
+      "block-id": { type: "string", required: true }
+    }),
+    oneOrMore("block")
+  ),
+  move: terminal("move", {
+    "block-id": { type: "string", required: false },
+    "block-ids": { type: "string", required: false },
+    "from-block-id": { type: "string", required: false },
+    "to-block-id": { type: "string", required: false },
+    "after-block-id": { type: "string", required: false },
+    "before-block-id": { type: "string", required: false },
+    "at-start": { type: "boolean", required: false },
+    "at-end": { type: "boolean", required: false }
+  }, "none")
+};
+
+// src/grammar/schemas/index.ts
+var GRAMMAR = {
+  ...DOCUMENT_GRAMMAR,
+  ...AGENT_GRAMMAR,
+  ...DIFF_GRAMMAR
+};
+
+// src/grammar/validation.ts
+import { z } from "zod";
+var IdSchema = z.string().min(1);
+var FunctionNameSchema = z.string().regex(
+  /^[\w-]+:[\w-]+$/,
+  'Function name must follow "namespace:function" pattern'
+);
+var TextStyleSchema = z.enum([
+  "bold",
+  "italic",
+  "underline",
+  "strikethrough",
+  "code"
+]);
+var TextContentSchema = z.object({
+  type: z.literal("text"),
+  text: z.string(),
+  styles: z.array(TextStyleSchema).optional()
+});
+var MentionElementSchema = z.object({
+  type: z.literal("mention"),
+  mentionType: z.enum(["user", "document", "agent", "custom"]),
+  id: IdSchema,
+  label: z.string().optional()
+});
+var VariableElementSchema = z.object({
+  type: z.literal("variable"),
+  name: z.string().min(1),
+  prompt: z.string().optional(),
+  value: z.string().optional()
+});
+var LinkElementSchema = z.object({
+  type: z.literal("link"),
+  href: z.string().url(),
+  content: z.array(z.any())
+  // Simplified to avoid circular reference
+});
+var AnnotationElementSchema = z.object({
+  type: z.literal("annotation"),
+  content: z.array(z.any()),
+  // Simplified to avoid circular reference
+  annotation: z.object({
+    title: z.string().optional(),
+    comment: z.string().optional(),
+    confidence: z.number().min(0).max(1).optional()
+  }).catchall(z.any())
+});
+var InlineElementSchema = z.union([
+  MentionElementSchema,
+  VariableElementSchema,
+  LinkElementSchema,
+  AnnotationElementSchema
+]);
+var RichContentSchema = z.union([
+  TextContentSchema,
+  MentionElementSchema,
+  VariableElementSchema,
+  LinkElementSchema,
+  AnnotationElementSchema
+]);
+var ExecutionErrorSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  details: z.any().optional()
+});
+var ExecutionResultSchema = z.object({
+  success: z.boolean(),
+  data: z.any().optional(),
+  error: ExecutionErrorSchema.optional(),
+  timestamp: z.date().optional()
+});
+var ExecutableMetadataSchema = z.object({
+  enabled: z.boolean().optional(),
+  modelId: z.string().optional()
+}).catchall(z.any());
+var ContentNodeTypeSchema = z.enum([
+  "paragraph",
+  "heading",
+  "bulletListItem",
+  "numberedListItem",
+  "checklistItem",
+  "code",
+  "quote",
+  "separator",
+  "data",
+  "function"
+]);
+var ExecutableNodeTypeSchema = z.enum([
+  "function_call",
+  "trigger"
+]);
+var ContentNodeSchema = z.object({
+  id: IdSchema,
+  type: ContentNodeTypeSchema,
+  content: z.array(RichContentSchema),
+  children: z.array(z.any()).optional(),
+  // Simplified to avoid circular reference
+  props: z.object({}).passthrough().optional()
+});
+var ExecutableNodeSchema = z.object({
+  id: IdSchema,
+  type: ExecutableNodeTypeSchema,
+  fn: FunctionNameSchema,
+  parameters: z.object({}).passthrough(),
+  content: z.array(RichContentSchema).optional(),
+  result: ExecutionResultSchema.optional(),
+  metadata: ExecutableMetadataSchema.optional(),
+  props: z.object({}).passthrough().optional()
+});
+var NodeSchema = z.union([
+  ContentNodeSchema,
+  ExecutableNodeSchema
+]);
+var EditAttrOperationSchema = z.object({
+  type: z.literal("edit:attr"),
+  blockId: IdSchema,
+  name: z.string().min(1),
+  value: z.string()
+});
+var EditContentOperationSchema = z.object({
+  type: z.literal("edit:content"),
+  blockId: IdSchema,
+  content: z.array(RichContentSchema)
+});
+var EditParamsOperationSchema = z.object({
+  type: z.literal("edit:params"),
+  blockId: IdSchema,
+  params: z.object({}).passthrough()
+});
+var EditIdOperationSchema = z.object({
+  type: z.literal("edit:id"),
+  blockId: IdSchema,
+  newId: IdSchema
+});
+var InsertOperationSchema = z.object({
+  type: z.literal("insert"),
+  afterBlockId: IdSchema.optional(),
+  beforeBlockId: IdSchema.optional(),
+  atStart: z.boolean().optional(),
+  atEnd: z.boolean().optional(),
+  blocks: z.array(NodeSchema)
+}).refine(
+  (data) => {
+    const positionCount = [
+      data.afterBlockId,
+      data.beforeBlockId,
+      data.atStart,
+      data.atEnd
+    ].filter(Boolean).length;
+    return positionCount === 1;
+  },
+  {
+    message: "Insert operation must specify exactly one position"
+  }
+);
+var DeleteOperationSchema = z.object({
+  type: z.literal("delete"),
+  blockId: IdSchema
+});
+var ReplaceOperationSchema = z.object({
+  type: z.literal("replace"),
+  blockId: IdSchema,
+  blocks: z.array(NodeSchema)
+});
+var MoveOperationSchema = z.object({
+  type: z.literal("move"),
+  blockId: IdSchema.optional(),
+  blockIds: z.array(IdSchema).optional(),
+  fromBlockId: IdSchema.optional(),
+  toBlockId: IdSchema.optional(),
+  afterBlockId: IdSchema.optional(),
+  beforeBlockId: IdSchema.optional(),
+  atStart: z.boolean().optional(),
+  atEnd: z.boolean().optional()
+}).refine(
+  (data) => {
+    const sourceCount = [
+      data.blockId,
+      data.blockIds,
+      data.fromBlockId && data.toBlockId
+    ].filter(Boolean).length;
+    const targetCount = [
+      data.afterBlockId,
+      data.beforeBlockId,
+      data.atStart,
+      data.atEnd
+    ].filter(Boolean).length;
+    return sourceCount === 1 && targetCount === 1;
+  },
+  {
+    message: "Move operation must specify exactly one source and one target"
+  }
+);
+var EditOperationSchema = z.union([
+  EditAttrOperationSchema,
+  EditContentOperationSchema,
+  EditParamsOperationSchema,
+  EditIdOperationSchema,
+  InsertOperationSchema,
+  DeleteOperationSchema,
+  ReplaceOperationSchema,
+  MoveOperationSchema
+]);
+var DocumentMetadataSchema = z.object({
+  version: z.string().optional(),
+  created: z.date().optional(),
+  modified: z.date().optional()
+}).catchall(z.any());
+var IdyllDocumentSchema = z.object({
+  id: IdSchema,
+  nodes: z.array(NodeSchema),
+  metadata: DocumentMetadataSchema.optional()
+});
+var AgentDocumentSchema = z.object({
+  type: z.literal("agent"),
+  id: IdSchema,
+  name: z.string().optional(),
+  description: z.string().optional(),
+  model: z.string().optional(),
+  nodes: z.array(NodeSchema)
+});
+var DiffDocumentSchema = z.object({
+  type: z.literal("diff"),
+  targetDocument: z.string().optional(),
+  timestamp: z.date(),
+  operations: z.array(EditOperationSchema)
+});
+function validateDocument(data) {
+  return IdyllDocumentSchema.parse(data);
+}
+function validateAgentDocument(data) {
+  return AgentDocumentSchema.parse(data);
+}
+function validateDiffDocument(data) {
+  return DiffDocumentSchema.parse(data);
+}
+function validateNodes(data) {
+  return z.array(NodeSchema).parse(data);
+}
+function validateEditOperations(data) {
+  return z.array(EditOperationSchema).parse(data);
+}
+
+// src/grammar/parser/xml-parser.ts
 var compiler = new GrammarCompiler(GRAMMAR);
 var compiled = compiler.compile();
 function parseXmlToAst(xmlString) {
@@ -721,12 +957,36 @@ function parseXmlToAst(xmlString) {
     throw new ParseError("No root element found");
   }
   switch (rootElement.name) {
-    case "document":
-      return parseDocument(rootElement);
-    case "agent":
-      return parseAgent(rootElement);
-    case "diff":
-      return parseDiff(rootElement);
+    case "document": {
+      const document = parseDocument(rootElement);
+      try {
+        return validateDocument(document);
+      } catch (error) {
+        throw new ParseError(
+          `Document validation failed: ${error instanceof Error ? error.message : "Unknown validation error"}`
+        );
+      }
+    }
+    case "agent": {
+      const agent = parseAgent(rootElement);
+      try {
+        return validateAgentDocument(agent);
+      } catch (error) {
+        throw new ParseError(
+          `Agent document validation failed: ${error instanceof Error ? error.message : "Unknown validation error"}`
+        );
+      }
+    }
+    case "diff": {
+      const diff = parseDiff(rootElement);
+      try {
+        return validateDiffDocument(diff);
+      } catch (error) {
+        throw new ParseError(
+          `Diff document validation failed: ${error instanceof Error ? error.message : "Unknown validation error"}`
+        );
+      }
+    }
     default:
       throw new ParseError(
         `Unknown root element: ${rootElement.name}. Expected: document, agent, or diff`
@@ -1005,9 +1265,10 @@ function parseFunction(element, id, attrs) {
   return {
     id,
     type: "function",
-    content: [{ type: "text", text: description }],
+    content: [],
+    // Empty content array, description is in props
     children: definition.length > 0 ? definition : void 0,
-    props: { title, icon }
+    props: { title, icon, description }
   };
 }
 function parseContentNode(element, id, attrs, blockType) {
@@ -1282,7 +1543,7 @@ function serializeExecutableNode(node) {
 }
 function serializeFunctionNode(node) {
   const elements = [];
-  const description = node.content.map((c) => isTextContent(c) ? c.text : "").join("");
+  const description = node.props?.description || "";
   elements.push({
     type: "element",
     name: "function:description",
@@ -1533,10 +1794,10 @@ function serializeEditOperation(operation) {
   }
 }
 
-// document/executor.ts
-import { z } from "zod";
+// src/document/executor.ts
+import { z as z2 } from "zod";
 
-// document/abstract-function-executor.ts
+// src/document/abstract-function-executor.ts
 var AbstractFunctionExecutor = class {
   hooks;
   constructor(hooks) {
@@ -1593,7 +1854,7 @@ var AbstractFunctionExecutor = class {
   }
 };
 
-// document/executor.ts
+// src/document/executor.ts
 var DocumentExecutor = class extends AbstractFunctionExecutor {
   options;
   constructor(options) {
@@ -1654,7 +1915,7 @@ var DocumentExecutor = class extends AbstractFunctionExecutor {
         const errorResult = {
           success: false,
           error: {
-            message: error instanceof z.ZodError ? `Invalid parameters: ${error.errors.map((e) => e.message).join(", ")}` : "Parameter validation failed",
+            message: error instanceof z2.ZodError ? `Invalid parameters: ${error.issues.map((e) => e.message).join(", ")}` : "Parameter validation failed",
             code: "INVALID_PARAMETERS",
             details: error
           },
@@ -1711,8 +1972,8 @@ var DocumentExecutor = class extends AbstractFunctionExecutor {
     try {
       validatedParams = func.schema.parse(executableNode.parameters);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new Error(`Invalid parameters: ${error.errors.map((e) => e.message).join(", ")}`);
+      if (error instanceof z2.ZodError) {
+        throw new Error(`Invalid parameters: ${error.issues.map((e) => e.message).join(", ")}`);
       }
       throw error;
     }
@@ -1793,8 +2054,8 @@ var DocumentExecutor = class extends AbstractFunctionExecutor {
   }
 };
 
-// document/function-registry.ts
-import { z as z2 } from "zod";
+// src/document/function-registry.ts
+import { z as z3 } from "zod";
 function createFunctionRegistry(functions) {
   return functions;
 }
@@ -1810,7 +2071,7 @@ function createSimpleRegistry(functions) {
   const registry = {};
   for (const [name, fn] of Object.entries(functions)) {
     registry[name] = {
-      schema: z2.any(),
+      schema: z3.any(),
       // Accept any params
       execute: (params, content, context) => fn(params, content, context)
     };
@@ -1818,7 +2079,7 @@ function createSimpleRegistry(functions) {
   return registry;
 }
 
-// document/function-naming.ts
+// src/document/function-naming.ts
 function toAzureFunctionName(idyllFunctionName) {
   return idyllFunctionName.replace(":", "--");
 }
@@ -1852,8 +2113,8 @@ function buildFunctionName(module, functionName) {
   return module ? `${module}:${functionName}` : functionName;
 }
 
-// document/validator.ts
-async function validateDocument(document, context) {
+// src/document/validator.ts
+async function validateDocument2(document, context) {
   const errors = [];
   const warnings = [];
   validateStructure(document, errors, warnings);
@@ -1983,7 +2244,7 @@ function formatValidationIssues(issues) {
   }).join("\n");
 }
 
-// document/variable-resolution.ts
+// src/document/variable-resolution.ts
 function extractVariableDefinitions(nodes) {
   const definitions = /* @__PURE__ */ new Map();
   const seenNames = /* @__PURE__ */ new Set();
@@ -2154,7 +2415,7 @@ function interpolateContent(content, resolvedVariables) {
   return result;
 }
 
-// document/custom-function-executor.ts
+// src/document/custom-function-executor.ts
 var AgentCustomFunctionExecutor = class extends AbstractFunctionExecutor {
   options;
   constructor(options) {
@@ -2265,10 +2526,12 @@ function parseCustomFunction(document) {
   return null;
 }
 
-// document/diff-applier.ts
+// src/document/diff-applier.ts
 import { v4 as uuidv42 } from "uuid";
 function applyDiff(nodes, operations) {
   try {
+    validateNodes(nodes);
+    validateEditOperations(operations);
     let result = [...nodes];
     for (const operation of operations) {
       switch (operation.type) {
@@ -2300,6 +2563,7 @@ function applyDiff(nodes, operations) {
           throw new Error(`Unknown operation type: ${operation.type}`);
       }
     }
+    validateNodes(result);
     return { success: true, nodes: result };
   } catch (error) {
     return {
@@ -2555,10 +2819,10 @@ function trimContent(content) {
   });
 }
 
-// agent/agent.ts
+// src/agent/agent.ts
 import { generateText, streamText } from "ai";
 
-// agent/memory.ts
+// src/agent/memory.ts
 import { formatDistanceToNow } from "date-fns";
 var ActivityMemory = class {
   activities = [];
@@ -2630,10 +2894,10 @@ ${formatted}
   }
 };
 
-// agent/agent.ts
+// src/agent/agent.ts
 import { v4 as uuidv43 } from "uuid";
 
-// agent/system-prompt.ts
+// src/agent/system-prompt.ts
 function buildSystemPrompt(agent, availableTools) {
   const sections = [];
   sections.push(`You are ${agent.name || "an AI assistant"}.`);
@@ -2730,8 +2994,8 @@ When responding to user queries:
   return prompt;
 }
 
-// agent/custom-functions.ts
-import { z as z3 } from "zod";
+// src/agent/custom-functions.ts
+import { z as z4 } from "zod";
 function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext) {
   const customFunctions = {};
   console.log("\u{1F50D} Extracting custom functions from agent document...");
@@ -2751,8 +3015,8 @@ function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext) {
       const functionName = title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
       customFunctions[`custom:${functionName}`] = {
         description: description || `Custom function: ${title}`,
-        schema: z3.object({
-          context: z3.string().describe("Relevant context to help resolve any variables in the function").optional()
+        schema: z4.object({
+          context: z4.string().describe("Relevant context to help resolve any variables in the function").optional()
         }),
         execute: async (params, content, context) => {
           console.log(`\u{1F6E0}\uFE0F Executing custom function: ${title}`);
@@ -2844,7 +3108,7 @@ function extractFunctionDefinitionBlocks(functionBlock) {
   return definitionBlocks;
 }
 
-// agent/response-pipeline.ts
+// src/agent/response-pipeline.ts
 var ResponsePipeline = class {
   middleware = [];
   /**
@@ -2882,7 +3146,7 @@ var ResponsePipeline = class {
   }
 };
 
-// agent/agent.ts
+// src/agent/agent.ts
 var Agent = class {
   program;
   model;
@@ -3160,7 +3424,7 @@ export {
   serializeAstToXml,
   toAzureFunctionName,
   traverseNodes,
-  validateDocument,
+  validateDocument2 as validateDocument,
   validateFunctionName
 };
 //# sourceMappingURL=index.js.map
