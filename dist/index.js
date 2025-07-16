@@ -2820,7 +2820,11 @@ function trimContent(content) {
 }
 
 // src/agent/agent.ts
-import { generateText, streamText } from "ai";
+import {
+  generateText,
+  streamText,
+  tool
+} from "ai";
 
 // src/agent/memory.ts
 import { formatDistanceToNow } from "date-fns";
@@ -3175,20 +3179,34 @@ var Agent = class {
    * Initialize tools for AI SDK (converts functions to AI tools)
    */
   initializeTools() {
-    console.log("[Agent] Initializing tools, agent program has nodes:", this.program.nodes.length);
-    console.log("[Agent] Node types:", this.program.nodes.map((n) => n.type));
-    const customTools = extractCustomFunctions(this.program, this.functions, () => {
-      const lastUserMessage = this.currentMessages.filter((m) => m.role === "user").pop();
-      return typeof lastUserMessage?.content === "string" ? lastUserMessage.content : JSON.stringify(lastUserMessage?.content || "");
-    });
+    console.log(
+      "[Agent] Initializing tools, agent program has nodes:",
+      this.program.nodes.length
+    );
+    console.log(
+      "[Agent] Node types:",
+      this.program.nodes.map((n) => n.type)
+    );
+    const customTools = extractCustomFunctions(
+      this.program,
+      this.functions,
+      () => {
+        const lastUserMessage = this.currentMessages.filter((m) => m.role === "user").pop();
+        return typeof lastUserMessage?.content === "string" ? lastUserMessage.content : JSON.stringify(lastUserMessage?.content || "");
+      }
+    );
     console.log("[Agent] Custom tools extracted:", Object.keys(customTools));
     const allTools = mergeFunctionRegistries(this.functions, customTools);
-    console.log("[Agent] All tools after merge:", Object.keys(allTools).length, Object.keys(allTools));
-    for (const [name, tool] of Object.entries(allTools)) {
+    console.log(
+      "[Agent] All tools after merge:",
+      Object.keys(allTools).length,
+      Object.keys(allTools)
+    );
+    for (const [name, functionDef] of Object.entries(allTools)) {
       const aiToolName = toAzureFunctionName(name);
-      this.aiTools[aiToolName] = {
-        description: tool.description,
-        parameters: tool.schema,
+      const createdTool = tool({
+        description: functionDef.description || "",
+        parameters: functionDef.schema,
         execute: async (params) => {
           console.log(`\u{1F527} Executing function: ${name}`);
           const context = {
@@ -3199,7 +3217,7 @@ var Agent = class {
           try {
             const content = params.content || "";
             delete params.content;
-            const result = await tool.execute(params, content, context);
+            const result = await functionDef.execute(params, content, context);
             const finalResult = await this.responsePipeline.process({
               functionName: name,
               params,
@@ -3236,7 +3254,12 @@ var Agent = class {
             throw error;
           }
         }
-      };
+      });
+      if (name === "documents:create") {
+        console.log("[Agent] Created tool:", createdTool);
+        console.log("[Agent] Tool parameters:", createdTool.parameters);
+      }
+      this.aiTools[aiToolName] = createdTool;
     }
   }
   /**
@@ -3267,12 +3290,20 @@ var Agent = class {
   async chat(messages, options) {
     this.currentMessages = messages;
     const userMessage = messages[messages.length - 1]?.content;
+    if (options && "tools" in options) {
+      console.log("[Agent] WARNING: chat() received options with tools property!", options.tools);
+    }
     try {
       const activity = this.memory.add({
         type: "chat",
         userMessage: typeof userMessage === "string" ? userMessage : JSON.stringify(userMessage)
       });
+      console.log("[Agent] About to call generateText with tools:", Object.keys(this.aiTools));
+      if (this.aiTools["documents--create"]) {
+        console.log("[Agent] documents--create tool in generateText:", this.aiTools["documents--create"]);
+      }
       const result = await generateText({
+        ...options,
         model: this.model,
         system: this.getSystemPrompt(),
         messages,
@@ -3319,7 +3350,13 @@ var Agent = class {
         type: "chat",
         userMessage: typeof userMessage === "string" ? userMessage : JSON.stringify(userMessage)
       });
+      console.log("[Agent] About to call streamText with tools:", Object.keys(this.aiTools));
+      if (this.aiTools["documents--create"]) {
+        console.log("[Agent] documents--create tool:", this.aiTools["documents--create"]);
+        console.log("[Agent] documents--create parameters:", this.aiTools["documents--create"].parameters);
+      }
       const result = await streamText({
+        ...options,
         model: this.model,
         system: this.getSystemPrompt(),
         messages,
@@ -3341,6 +3378,7 @@ var Agent = class {
           if (options?.onFinish) {
             await options.onFinish({
               text,
+              // @ts-ignore
               functionCalls: toolCalls?.map((tc) => ({
                 ...tc,
                 functionName: fromAzureFunctionName(tc.toolName)

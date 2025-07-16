@@ -1,6 +1,6 @@
 {
   "name": "@idyllic-labs/idyll-engine",
-  "version": "4.2.1",
+  "version": "4.3.1",
   "description": "Document execution engine for Idyllic language experimentation",
   "type": "module",
   "main": "./dist/index.js",
@@ -31,7 +31,7 @@
     "date-fns": "^3.0.0",
     "uuid": "^11.1.0",
     "xml-js": "^1.6.11",
-    "zod": "^4.0.5"
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@ai-sdk/azure": "^1.3.23",

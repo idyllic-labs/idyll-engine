@@ -26,7 +26,10 @@
       "Bash(timeout:*)",
       "Bash(touch:*)",
       "Bash(cp:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(chmod:*)",
+      "Bash(./run-all-demos.sh:*)",
+      "Bash(./run-working-demos.sh:*)"
     ],
     "deny": []
   }

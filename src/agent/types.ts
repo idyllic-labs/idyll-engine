@@ -54,11 +54,10 @@ export interface AgentContext {
 
 /**
  * Agent execution options
+ * Passthrough type for streamText options with custom onFinish override
  */
-export interface AgentExecuteOptions {
-  temperature?: number;
-  maxSteps?: number;
-  stream?: boolean;
+export type AgentExecuteOptions = Omit<Parameters<typeof import('ai').streamText>[0], 'model' | 'system' | 'messages' | 'tools' | 'toolChoice' | 'onFinish'> & {
+  // Override onFinish to include our custom fields
   onFinish?: (result: {
     text: string;
     functionCalls?: Array<{
