@@ -286,7 +286,7 @@ async function chat(input: string) {
     const result = await currentAgent.chat(messages, {
       temperature: 0.7,
       maxSteps: 10,
-    });
+    } as any); // Type assertion for CLI compatibility
 
     // Add the assistant message
     messages.push(result.message);
