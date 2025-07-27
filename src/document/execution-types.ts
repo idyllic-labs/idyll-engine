@@ -113,8 +113,8 @@ export interface FunctionExecutionReport {
  */
 export interface ExecutionHooks {
   beforeExecution?: (functionName: string, params: any, context: NodeExecutionContext) => Promise<void> | void;
-  afterExecution?: (functionName: string, result: unknown, duration: number) => Promise<void> | void;
-  onError?: (functionName: string, error: unknown, duration: number) => Promise<void> | void;
+  afterExecution?: (functionName: string, result: unknown, duration: number, context: NodeExecutionContext) => Promise<void> | void;
+  onError?: (functionName: string, error: unknown, duration: number, context: NodeExecutionContext) => Promise<void> | void;
 }
 
 // ============================================

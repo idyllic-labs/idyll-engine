@@ -44,7 +44,7 @@ export abstract class AbstractFunctionExecutor {
       const duration = performance.now() - startTime;
       
       // Post-execution hooks
-      await this.hooks.afterExecution?.(functionName, result, duration);
+      await this.hooks.afterExecution?.(functionName, result, duration, context);
       
       return {
         success: true,
@@ -56,7 +56,7 @@ export abstract class AbstractFunctionExecutor {
       const duration = performance.now() - startTime;
       
       // Error hooks
-      await this.hooks.onError?.(functionName, error, duration);
+      await this.hooks.onError?.(functionName, error, duration, context);
       
       return {
         success: false,

@@ -1812,7 +1812,7 @@ var AbstractFunctionExecutor = class {
     try {
       const result = await this.executeWithTimeout(fndef.execute, params, content, context);
       const duration = performance.now() - startTime;
-      await this.hooks.afterExecution?.(functionName, result, duration);
+      await this.hooks.afterExecution?.(functionName, result, duration, context);
       return {
         success: true,
         data: result,
@@ -1821,7 +1821,7 @@ var AbstractFunctionExecutor = class {
       };
     } catch (error) {
       const duration = performance.now() - startTime;
-      await this.hooks.onError?.(functionName, error, duration);
+      await this.hooks.onError?.(functionName, error, duration, context);
       return {
         success: false,
         error: {
@@ -3103,10 +3103,10 @@ function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext, custom
       const icon = block.props?.icon;
       const description = extractTextContent2(block);
       const definitionBlocks = extractFunctionDefinitionBlocks(block);
-      console.log(`\u{1F4CB} Extracted ${definitionBlocks.length} definition blocks from function "${title}"`);
-      console.log("\u{1F4CB} Definition blocks:", JSON.stringify(definitionBlocks, null, 2));
+      logger2.debug(`Extracted ${definitionBlocks.length} definition blocks from function "${title}"`);
+      logger2.debug("Definition blocks:", JSON.stringify(definitionBlocks, null, 2));
       if (definitionBlocks.length === 0) {
-        console.warn(`Function "${title}" has no definition blocks`);
+        logger2.warn(`Function "${title}" has no definition blocks`);
         continue;
       }
       const functionName = title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -3116,7 +3116,7 @@ function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext, custom
           context: z4.string().describe("Relevant context to help resolve any variables in the function").optional()
         }),
         execute: async (params, content, context) => {
-          console.log(`\u{1F6E0}\uFE0F Executing custom function: ${title}`);
+          logger2.debug(`Executing custom function: ${title}`);
           const functionDoc = {
             id: `custom-function-${functionName}`,
             nodes: definitionBlocks
@@ -3138,10 +3138,10 @@ function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext, custom
           } else {
             agentContext = `Function invoked: ${title}`;
           }
-          console.log(`\u{1F4DD} Agent context for variable resolution: "${agentContext}"`);
-          console.log(`\u{1F4E6} Params:`, params);
-          console.log(`\u{1F4C4} Content:`, content);
-          console.log(`\u{1F50D} GetAgentContext available:`, !!getAgentContext);
+          logger2.debug(`Agent context for variable resolution: "${agentContext}"`);
+          logger2.debug(`Params:`, params);
+          logger2.debug(`Content:`, content);
+          logger2.debug(`GetAgentContext available:`, !!getAgentContext);
           try {
             const executionOptions = {
               functions: baseFunctions,
@@ -3150,15 +3150,15 @@ function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext, custom
             const executionContext = customFunctionExecutor ? await customFunctionExecutor.execute(customFunctionBlock, executionOptions) : await executeCustomFunction(customFunctionBlock, executionOptions);
             const lastNodeId = Array.from(executionContext.nodes.keys()).pop();
             const lastResult = lastNodeId ? executionContext.nodes.get(lastNodeId) : void 0;
-            console.log(`\u{1F50D} Execution complete. Last node ID: ${lastNodeId}`);
-            console.log(`\u{1F4CB} Last result:`, lastResult);
-            console.log(`\u{1F4CA} All nodes:`, Array.from(executionContext.nodes.entries()));
+            logger2.debug(`Execution complete. Last node ID: ${lastNodeId}`);
+            logger2.debug(`Last result:`, lastResult);
+            logger2.debug(`All nodes:`, Array.from(executionContext.nodes.entries()));
             const results = Array.from(executionContext.nodes.values());
             const successfulResults = results.filter((r) => r.success);
             const failedResults = results.filter((r) => !r.success);
-            console.log(`\u{1F4CA} Execution summary: ${successfulResults.length} successful, ${failedResults.length} failed`);
+            logger2.debug(`Execution summary: ${successfulResults.length} successful, ${failedResults.length} failed`);
             if (successfulResults.length > 0) {
-              console.log(`\u{1F4E6} Returning full FunctionExecutionReport for compression`);
+              logger2.debug(`Returning full FunctionExecutionReport for compression`);
               return executionContext;
             }
             if (lastResult && !lastResult.success) {
@@ -3167,7 +3167,7 @@ function extractCustomFunctions(agentDoc, baseFunctions, getAgentContext, custom
             }
             return executionContext;
           } catch (error) {
-            console.error(`\u274C Custom function "${title}" failed:`, error);
+            logger2.error(`Custom function "${title}" failed:`, error);
             throw error;
           }
         }

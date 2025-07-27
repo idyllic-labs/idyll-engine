@@ -254,12 +254,6 @@ export class Agent {
             : JSON.stringify(userMessage),
       });
 
-      // Debug: Log what we're passing to generateText
-      this.logger.debug(`About to call generateText with tools: ${Object.keys(this.aiTools).join(', ')}`);
-      if (this.aiTools['documents--create']) {
-        this.logger.debug('documents--create tool in generateText:', this.aiTools['documents--create']);
-      }
-      
       const result = await generateText({
         ...options,
         model: this.model,
@@ -323,13 +317,6 @@ export class Agent {
             : JSON.stringify(userMessage),
       });
 
-      // Debug tools before calling streamText
-      this.logger.debug(`About to call streamText with tools: ${Object.keys(this.aiTools).join(', ')}`);
-      if (this.aiTools['documents--create']) {
-        this.logger.debug('documents--create tool:', this.aiTools['documents--create']);
-        this.logger.debug('documents--create parameters:', this.aiTools['documents--create'].parameters);
-      }
-      
       const result = await streamText({
         ...options,
         model: this.model,
